@@ -128,6 +128,29 @@
             <button id="wireframe-toggle">Toggle Wireframe</button>
             <button id="reset-position">Reset Position</button>
         </div>
+        <div class="control-group">
+            <label>Lens Settings:</label>
+            <div class="slider-container">
+                <label>Focal Length:</label>
+                <input type="range" id="focal-length" min="10" max="80" step="1" value="35">
+                <span>35mm</span>
+            </div>
+            <div class="slider-container">
+                <label>Distortion:</label>
+                <input type="range" id="distortion" min="-1" max="1" step="0.01" value="0">
+                <span>0</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label>Color Grading (LUT):</label>
+            <input type="file" id="lut-input" accept=".cube,.3dl">
+            <div class="slider-container">
+                <label>LUT Intensity:</label>
+                <input type="range" id="lut-intensity" min="0" max="100" step="1" value="100">
+                <span>100%</span>
+            </div>
+            <button id="reset-lut">Reset Color Grading</button>
+        </div>
         <div id="message"></div>
         <div id="loading-spinner">Loading...</div>
         <div id="stats"></div>
@@ -136,8 +159,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LensDistortionShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LUTShader.js"></script>
     <script>
         let scene, camera, renderer, controls, currentModel;
+        let composer, lensPass, lutPass;
+        let currentLUTTexture = null;
         const messageEl = document.getElementById('message');
         const loadingSpinner = document.getElementById('loading-spinner');
         const statsEl = document.getElementById('stats');
@@ -185,6 +215,23 @@
             renderer.toneMappingExposure = 1.0;
 
             // Removed grid helper
+
+            // Set up post processing
+            composer = new THREE.EffectComposer(renderer);
+            
+            const renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+            
+            // Lens distortion pass
+            lensPass = new THREE.ShaderPass(THREE.LensDistortionShader);
+            lensPass.uniforms.distortion.value = 0.0;
+            lensPass.uniforms.focalLength.value = 35.0;
+            composer.addPass(lensPass);
+            
+            // LUT pass
+            lutPass = new THREE.ShaderPass(THREE.LUTShader);
+            lutPass.uniforms.intensity.value = 1.0;
+            composer.addPass(lutPass);
 
             setupEventListeners();
             animate();
@@ -265,7 +312,7 @@
             // Position controls
             document.getElementById('position-x').addEventListener('input', function(e) {
                 if (currentModel) {
-                    currentModel.position.x = parseFloat(e.target.value);
+                    currentModel.position.x = -parseFloat(e.target.value); // Inverted for intuitive left/right
                     this.nextElementSibling.textContent = e.target.value;
                 }
             });
@@ -279,7 +326,7 @@
 
             document.getElementById('position-z').addEventListener('input', function(e) {
                 if (currentModel) {
-                    currentModel.position.z = parseFloat(e.target.value);
+                    currentModel.position.z = -parseFloat(e.target.value); // Inverted for intuitive forward/back
                     this.nextElementSibling.textContent = e.target.value;
                 }
             });
@@ -295,6 +342,72 @@
                     document.getElementById('position-y').nextElementSibling.textContent = '0';
                     document.getElementById('position-z').nextElementSibling.textContent = '0';
                 }
+            });
+
+            // Lens controls
+            document.getElementById('focal-length').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                lensPass.uniforms.focalLength.value = value;
+                this.nextElementSibling.textContent = value + 'mm';
+            });
+
+            document.getElementById('distortion').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                lensPass.uniforms.distortion.value = value;
+                this.nextElementSibling.textContent = value.toFixed(2);
+            });
+
+            // LUT controls
+            document.getElementById('lut-input').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const content = e.target.result;
+                    
+                    // Parse LUT file (supporting .cube format)
+                    if (file.name.endsWith('.cube')) {
+                        const lutData = parseCubeLUT(content);
+                        if (lutData) {
+                            if (currentLUTTexture) {
+                                currentLUTTexture.dispose();
+                            }
+                            currentLUTTexture = new THREE.DataTexture(
+                                lutData,
+                                32,
+                                32,
+                                THREE.RGBFormat,
+                                THREE.FloatType
+                            );
+                            currentLUTTexture.needsUpdate = true;
+                            lutPass.uniforms.lutMap.value = currentLUTTexture;
+                            showMessage('LUT loaded successfully!', 'green');
+                        }
+                    } else {
+                        showMessage('Unsupported LUT format. Please use .cube files.', 'red');
+                    }
+                };
+                reader.readAsText(file);
+            });
+
+            document.getElementById('lut-intensity').addEventListener('input', function(e) {
+                const value = parseInt(e.target.value) / 100;
+                lutPass.uniforms.intensity.value = value;
+                this.nextElementSibling.textContent = (value * 100).toFixed(0) + '%';
+            });
+
+            document.getElementById('reset-lut').addEventListener('click', function() {
+                if (currentLUTTexture) {
+                    currentLUTTexture.dispose();
+                    currentLUTTexture = null;
+                }
+                lutPass.uniforms.lutMap.value = null;
+                lutPass.uniforms.intensity.value = 1.0;
+                document.getElementById('lut-intensity').value = 100;
+                document.getElementById('lut-intensity').nextElementSibling.textContent = '100%';
+                document.getElementById('lut-input').value = '';
+                showMessage('Color grading reset', 'blue');
             });
 
             // Camera reset
@@ -417,10 +530,32 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        function parseCubeLUT(content) {
+            const lines = content.split('\n');
+            const size = 32; // Standard size for LUT
+            const data = new Float32Array(size * size * size * 3);
+            
+            let dataIndex = 0;
+            for (const line of lines) {
+                // Skip comments and empty lines
+                if (line.startsWith('#') || line.trim() === '') continue;
+                
+                // Parse color values
+                const values = line.trim().split(/\s+/).map(Number);
+                if (values.length === 3) {
+                    data[dataIndex++] = values[0];
+                    data[dataIndex++] = values[1];
+                    data[dataIndex++] = values[2];
+                }
+            }
+            
+            return data;
+        }
+
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            renderer.render(scene, camera);
+            composer.render();
         }
 
         init();
