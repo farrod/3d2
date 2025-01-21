@@ -16,19 +16,43 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 300px;
         }
         .control-group {
             margin-top: 10px;
-            padding: 8px;
+            padding: 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            background: rgba(255, 255, 255, 0.95);
+        }
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
         }
         .slider-container {
             display: grid;
             grid-template-columns: 100px 1fr 40px;
             gap: 10px;
             align-items: center;
-            margin: 5px 0;
+            margin: 8px 0;
+        }
+        .file-input-container {
+            margin: 10px 0;
+        }
+        .file-input-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        .file-input-container input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
         }
         button {
             background: #4CAF50;
@@ -38,6 +62,7 @@
             border-radius: 4px;
             cursor: pointer;
             margin: 2px;
+            font-size: 12px;
         }
         button:hover {
             background: #45a049;
@@ -47,9 +72,7 @@
             padding: 8px;
             border-radius: 4px;
             display: none;
-        }
-        #lut-controls {
-            margin-top: 10px;
+            font-weight: bold;
         }
         #preview-canvas {
             position: absolute;
@@ -62,9 +85,20 @@
 <body>
     <canvas id="preview-canvas"></canvas>
     <div id="controls-panel">
-        <input type="file" id="file-input" accept=".glb,.gltf">
-        <div id="lut-controls">
-            <input type="file" id="lut-input" accept=".cube,.3dl">
+        <div class="control-group">
+            <h3>Model Controls</h3>
+            <div class="file-input-container">
+                <label>Load 3D Model (.glb, .gltf):</label>
+                <input type="file" id="file-input" accept=".glb,.gltf">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>LUT Controls</h3>
+            <div class="file-input-container">
+                <label>Load LUT File (.cube, .3dl):</label>
+                <input type="file" id="lut-input" accept=".cube,.3dl">
+            </div>
             <div class="slider-container">
                 <label>LUT Mix:</label>
                 <input type="range" id="lut-mix" min="0" max="1" step="0.01" value="1">
@@ -73,6 +107,7 @@
         </div>
         
         <div class="control-group">
+            <h3>Lighting Controls</h3>
             <div class="slider-container">
                 <label>Ambient:</label>
                 <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
@@ -96,6 +131,7 @@
         </div>
 
         <div class="control-group">
+            <h3>Position Controls</h3>
             <div class="slider-container">
                 <label>Left/Right:</label>
                 <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
@@ -114,10 +150,15 @@
         </div>
 
         <div class="control-group">
-            <label>Background:</label>
-            <input type="color" id="bg-color" value="#f0f0f0" style="margin-left: 10px;">
-            <button id="reset-camera">Reset View</button>
-            <button id="reset-position">Reset Position</button>
+            <h3>Scene Controls</h3>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <label>Background:</label>
+                <input type="color" id="bg-color" value="#f0f0f0">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="reset-camera">Reset View</button>
+                <button id="reset-position">Reset Position</button>
+            </div>
         </div>
 
         <div id="message"></div>
@@ -167,9 +208,17 @@
             directionalLight.position.set(2, 2, 2);
             scene.add(directionalLight);
 
+            // Add a grid helper for reference
+            const gridHelper = new THREE.GridHelper(10, 10);
+            scene.add(gridHelper);
+
             setupListeners();
             animate();
         }
-</script>
+
+        // ... [Rest of the JavaScript functions from Part 2] ...
+
+        init();
+    </script>
 </body>
 </html>
