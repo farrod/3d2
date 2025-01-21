@@ -94,6 +94,17 @@
         </div>
 
         <div class="control-group">
+            <label>Color Grading (LUT):</label>
+            <input type="file" id="lut-input" accept=".cube,.look">
+            <div class="slider-container">
+                <label>LUT Mix:</label>
+                <input type="range" id="lut-mix" min="0" max="100" step="1" value="100">
+                <span>100%</span>
+            </div>
+            <button id="reset-lut">Reset LUT</button>
+        </div>
+
+        <div class="control-group">
             <label>Background:</label>
             <input type="color" id="bg-color" value="#f0f0f0" style="margin-left: 10px;">
             <button id="reset-camera">Reset View</button>
@@ -106,10 +117,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
 
     <script>
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
+        let composer, lutPass;
+        let currentLUT = null;
 
         function init() {
             scene = new THREE.Scene();
@@ -125,6 +142,68 @@
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
+
+            // Post-processing setup
+            composer = new THREE.EffectComposer(renderer);
+            const renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            // Custom LUT shader
+            const lutShader = {
+                uniforms: {
+                    tDiffuse: { value: null },
+                    lutMap: { value: null },
+                    lutSize: { value: 32 },
+                    intensity: { value: 1.0 }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse;
+                    uniform sampler2D lutMap;
+                    uniform float lutSize;
+                    uniform float intensity;
+                    varying vec2 vUv;
+
+                    void main() {
+                        vec4 originalColor = texture2D(tDiffuse, vUv);
+                        
+                        if (lutMap == null) {
+                            gl_FragColor = originalColor;
+                            return;
+                        }
+
+                        float sliceSize = 1.0 / lutSize;
+                        float slicePixelSize = sliceSize / lutSize;
+                        float width = lutSize * lutSize;
+                        float sliceInnerSize = slicePixelSize * (lutSize - 1.0);
+                        
+                        vec2 slice;
+                        slice.y = floor(originalColor.b * lutSize);
+                        slice.x = floor(originalColor.r * lutSize);
+                        
+                        float xOffset = slicePixelSize * 0.5 + originalColor.r * sliceInnerSize;
+                        float yOffset = sliceSize * 0.5 + originalColor.g * sliceInnerSize;
+                        float zOffset = sliceSize * slice.y;
+                        
+                        vec2 uv;
+                        uv.x = slice.x * sliceSize + xOffset;
+                        uv.y = 1.0 - (zOffset + yOffset);
+                        
+                        vec4 lutColor = texture2D(lutMap, uv);
+                        gl_FragColor = mix(originalColor, lutColor, intensity);
+                    }
+                `
+            };
+
+            lutPass = new THREE.ShaderPass(lutShader);
+            lutPass.renderToScreen = true;
+            composer.addPass(lutPass);
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
@@ -189,7 +268,26 @@
                 });
             });
 
-            window.addEventListener('resize', onWindowResize, false);
+            document.getElementById('lut-input').addEventListener('change', loadLUT);
+            
+            document.getElementById('lut-mix').addEventListener('input', e => {
+                if (lutPass) {
+                    lutPass.uniforms.intensity.value = parseInt(e.target.value) / 100;
+                    e.target.nextElementSibling.textContent = e.target.value + '%';
+                }
+            });
+
+            document.getElementById('reset-lut').addEventListener('click', () => {
+                if (currentLUT) {
+                    currentLUT.dispose();
+                    currentLUT = null;
+                }
+                lutPass.uniforms.lutMap.value = null;
+                document.getElementById('lut-mix').value = 100;
+                document.getElementById('lut-mix').nextElementSibling.textContent = '100%';
+                document.getElementById('lut-input').value = '';
+                showMessage('Color grading reset', 'blue');
+            });
         }
 
         function loadModel(event) {
@@ -284,10 +382,65 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        function loadLUT(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                if (file.name.endsWith('.cube')) {
+                    const lutData = parseCubeLUT(content);
+                    if (lutData) {
+                        if (currentLUT) {
+                            currentLUT.dispose();
+                        }
+                        currentLUT = new THREE.DataTexture(
+                            lutData,
+                            32,
+                            32 * 32,
+                            THREE.RGBFormat,
+                            THREE.FloatType
+                        );
+                        currentLUT.needsUpdate = true;
+                        lutPass.uniforms.lutMap.value = currentLUT;
+                        lutPass.uniforms.lutSize.value = 32;
+                        showMessage('LUT loaded successfully!', 'green');
+                    }
+                } else {
+                    showMessage('Unsupported LUT format. Please use .cube files.', 'red');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCubeLUT(content) {
+            const lines = content.split('\n');
+            const data = new Float32Array(32 * 32 * 32 * 3);
+            let dataIndex = 0;
+            
+            for (const line of lines) {
+                if (line.startsWith('#') || line.trim() === '' || 
+                    line.startsWith('TITLE') || line.startsWith('LUT_3D_SIZE') || 
+                    line.startsWith('DOMAIN_MIN') || line.startsWith('DOMAIN_MAX')) {
+                    continue;
+                }
+                
+                const values = line.trim().split(/\s+/).map(Number);
+                if (values.length === 3) {
+                    data[dataIndex++] = values[0];
+                    data[dataIndex++] = values[1];
+                    data[dataIndex++] = values[2];
+                }
+            }
+            
+            return data;
+        }
+
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            renderer.render(scene, camera);
+            composer.render();
         }
 
         init();
