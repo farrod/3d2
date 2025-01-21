@@ -28,10 +28,26 @@
         }
         .control-group {
             margin-top: 10px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
         .control-group label {
             display: block;
             margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+        }
+        .slider-container input[type="range"] {
+            flex: 1;
+        }
+        .slider-container span {
+            min-width: 40px;
         }
         button {
             background: #4CAF50;
@@ -61,6 +77,33 @@
         <div class="control-group">
             <label>Background Color:</label>
             <input type="color" id="bg-color" value="#f0f0f0">
+        </div>
+        <div class="control-group">
+            <label>Lighting Controls:</label>
+            <div class="slider-container">
+                <label>Ambient Light:</label>
+                <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
+                <span>0.5</span>
+            </div>
+            <div class="slider-container">
+                <label>Direct Light:</label>
+                <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="0.8">
+                <span>0.8</span>
+            </div>
+            <div class="slider-container">
+                <label>Exposure:</label>
+                <input type="range" id="exposure" min="0" max="2" step="0.1" value="1">
+                <span>1.0</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label>Light Color:</label>
+            <div class="slider-container">
+                <label>Temperature:</label>
+                <input type="range" id="light-temp" min="1000" max="10000" step="100" value="6500">
+                <span>6500K</span>
+            </div>
+            <input type="color" id="light-color" value="#ffffff">
         </div>
         <div class="control-group">
             <button id="reset-camera">Reset Camera</button>
@@ -109,7 +152,7 @@
             controls.maxDistance = 100;
             controls.minDistance = 1;
 
-            // Improved lighting
+            // Enhanced lighting setup
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
             
@@ -118,12 +161,45 @@
             directionalLight.castShadow = true;
             scene.add(directionalLight);
 
-            // Add grid helper
-            const gridHelper = new THREE.GridHelper(10, 10);
-            scene.add(gridHelper);
+            // Set up tone mapping
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+
+            // Removed grid helper
 
             setupEventListeners();
             animate();
+        }
+
+        // Convert color temperature to RGB
+        function kelvinToRGB(temperature) {
+            temperature = temperature / 100;
+            let r, g, b;
+            
+            if (temperature <= 66) {
+                r = 255;
+                g = temperature;
+                g = 99.4708025861 * Math.log(g) - 161.1195681661;
+                
+                if (temperature <= 19) {
+                    b = 0;
+                } else {
+                    b = temperature - 10;
+                    b = 138.5177312231 * Math.log(b) - 305.0447927307;
+                }
+            } else {
+                r = temperature - 60;
+                r = 329.698727446 * Math.pow(r, -0.1332047592);
+                g = temperature - 60;
+                g = 288.1221695283 * Math.pow(g, -0.0755148492);
+                b = 255;
+            }
+            
+            return {
+                r: Math.min(255, Math.max(0, r)) / 255,
+                g: Math.min(255, Math.max(0, g)) / 255,
+                b: Math.min(255, Math.max(0, b)) / 255
+            };
         }
 
         function setupEventListeners() {
@@ -133,6 +209,38 @@
             // Background color control
             document.getElementById('bg-color').addEventListener('input', function(e) {
                 scene.background = new THREE.Color(e.target.value);
+            });
+
+            // Lighting controls
+            document.getElementById('ambient-intensity').addEventListener('input', function(e) {
+                ambientLight.intensity = parseFloat(e.target.value);
+                this.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('direct-intensity').addEventListener('input', function(e) {
+                directionalLight.intensity = parseFloat(e.target.value);
+                this.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('exposure').addEventListener('input', function(e) {
+                renderer.toneMappingExposure = parseFloat(e.target.value);
+                this.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('light-temp').addEventListener('input', function(e) {
+                const temp = parseInt(e.target.value);
+                const rgb = kelvinToRGB(temp);
+                const color = new THREE.Color(rgb.r, rgb.g, rgb.b);
+                ambientLight.color.copy(color);
+                directionalLight.color.copy(color);
+                document.getElementById('light-color').value = '#' + color.getHexString();
+                this.nextElementSibling.textContent = temp + 'K';
+            });
+
+            document.getElementById('light-color').addEventListener('input', function(e) {
+                const color = new THREE.Color(e.target.value);
+                ambientLight.color.copy(color);
+                directionalLight.color.copy(color);
             });
 
             // Camera reset
