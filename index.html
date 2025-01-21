@@ -1,52 +1,66 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Model Viewer with LUT</title>
     <title>3D Model Viewer</title>
     <style>
-        /* Previous styles remain the same */
         body { 
             margin: 0; 
             font-family: Arial, sans-serif;
-@@ -18,19 +17,6 @@
+        }
+        #controls-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        /* Add new LUT control styles */
-        .lut-controls {
+        .control-group {
             margin-top: 10px;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
         }
-        .lut-toggle {
-            display: flex;
+        .slider-container {
+            display: grid;
+            grid-template-columns: 100px 1fr 40px;
+            gap: 10px;
             align-items: center;
-            margin-bottom: 10px;
+            margin: 5px 0;
         }
-        /* Rest of previous styles */
-        .control-group {
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #message {
             margin-top: 10px;
             padding: 8px;
-@@ -68,52 +54,66 @@
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
     <div id="controls-panel">
         <input type="file" id="file-input" accept=".glb,.gltf">
-
-        <!-- Add new LUT controls -->
-        <div class="lut-controls">
-            <div class="lut-toggle">
-                <input type="checkbox" id="lut-enabled" />
-                <label for="lut-enabled">Enable LUT</label>
+        
         <div class="control-group">
             <div class="slider-container">
                 <label>Ambient:</label>
                 <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
                 <span>0.5</span>
             </div>
-            <input type="file" id="lut-input" accept=".cube,.3dl" />
             <div class="slider-container">
-                <label>LUT Intensity:</label>
-                <input type="range" id="lut-intensity" min="0" max="1" step="0.01" value="1">
                 <label>Direct:</label>
                 <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
                 <span>1.0</span>
@@ -63,9 +77,7 @@
             </div>
         </div>
 
-        <!-- Previous controls remain the same -->
         <div class="control-group">
-            <!-- Previous controls -->
             <div class="slider-container">
                 <label>Left/Right:</label>
                 <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
@@ -82,98 +94,72 @@
                 <span>0</span>
             </div>
         </div>
+
         <div class="control-group">
             <label>Background:</label>
             <input type="color" id="bg-color" value="#f0f0f0" style="margin-left: 10px;">
             <button id="reset-camera">Reset View</button>
             <button id="reset-position">Reset Position</button>
         </div>
+
         <div id="message"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/LUTPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/LUTCubeLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/LUTPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/LUTCubeLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/LUTPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/LUTCubeLoader.js"></script>
 
     <script>
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
-        let composer, lutPass;
-        let composer, lutPass;
-        let composer, lutPass, renderPass;
-        let lutEnabled = false;
 
         function init() {
-            // Previous initialization code remains the same
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf0f0f0);
 
-@@ -128,10 +128,6 @@
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(2, 2, 2);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
 
-            // Initialize post-processing
-            initPostProcessing();
-            // Rest of the initialization
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
-@@ -146,92 +142,156 @@
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(2, 2, 2);
+            scene.add(directionalLight);
+
+            setupListeners();
             animate();
         }
 
-        function initPostProcessing() {
-            composer = new THREE.EffectComposer(renderer);
-            renderPass = new THREE.RenderPass(scene, camera);
-            composer.addPass(renderPass);
-            // Initialize LUT pass with a neutral LUT
-            lutPass = new THREE.LUTPass();
-            lutPass.enabled = false;
-            composer.addPass(lutPass);
-        }
         function setupListeners() {
-            // Previous listeners remain the same
             document.getElementById('file-input').addEventListener('change', loadModel);
-
-            // Add new LUT listeners
-            document.getElementById('lut-enabled').addEventListener('change', e => {
-                lutEnabled = e.target.checked;
-                if (lutPass) {
-                    lutPass.enabled = lutEnabled;
-                }
+            
             document.getElementById('ambient-intensity').addEventListener('input', e => {
                 ambientLight.intensity = parseFloat(e.target.value);
                 e.target.nextElementSibling.textContent = e.target.value;
             });
 
-            document.getElementById('lut-input').addEventListener('change', loadLUT);
             document.getElementById('direct-intensity').addEventListener('input', e => {
                 directionalLight.intensity = parseFloat(e.target.value);
                 e.target.nextElementSibling.textContent = e.target.value;
             });
 
-            document.getElementById('lut-intensity').addEventListener('input', e => {
-                if (lutPass) {
-                    lutPass.intensity = parseFloat(e.target.value);
-                }
             document.getElementById('exposure').addEventListener('input', e => {
                 renderer.toneMappingExposure = parseFloat(e.target.value);
                 e.target.nextElementSibling.textContent = e.target.value;
             });
 
-            // Previous listeners continue...
             document.getElementById('temperature').addEventListener('input', e => {
                 const temp = parseInt(e.target.value);
                 const rgb = kelvinToRGB(temp);
@@ -182,16 +168,20 @@
                 directionalLight.color.copy(color);
                 e.target.nextElementSibling.textContent = temp + 'K';
             });
+
             document.getElementById('bg-color').addEventListener('input', e => {
                 scene.background = new THREE.Color(e.target.value);
             });
+
             document.getElementById('reset-camera').addEventListener('click', () => {
                 camera.position.set(2, 2, 2);
                 camera.lookAt(0, 0, 0);
                 controls.target.set(0, 0, 0);
                 controls.update();
             });
+
             document.getElementById('reset-position').addEventListener('click', resetPosition);
+
             ['x', 'y', 'z'].forEach(axis => {
                 document.getElementById(`position-${axis}`).addEventListener('input', e => {
                     if (!currentModel) return;
@@ -200,34 +190,20 @@
                     e.target.nextElementSibling.textContent = value;
                 });
             });
+
             window.addEventListener('resize', onWindowResize, false);
         }
 
-        function loadLUT(event) {
         function loadModel(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            const loader = new THREE.LUTCubeLoader();
             const loader = new THREE.GLTFLoader();
             const reader = new FileReader();
 
-            showMessage('Loading LUT...', 'blue');
             showMessage('Loading model...', 'blue');
 
             reader.onload = function(e) {
-                try {
-                    loader.load(e.target.result, function(result) {
-                        if (lutPass) {
-                            lutPass.lut = result;
-                            lutPass.enabled = document.getElementById('lut-enabled').checked;
-                            showMessage('LUT loaded successfully!', 'green');
-                        }
-                    });
-                } catch (error) {
-                    showMessage('Error loading LUT: ' + error.message, 'red');
-                    lutPass.enabled = false;
-                    document.getElementById('lut-enabled').checked = false;
                 loader.parse(e.target.result, '', function(gltf) {
                     if (currentModel) scene.remove(currentModel);
                     
@@ -256,6 +232,7 @@
             
             reader.readAsArrayBuffer(file);
         }
+
         function resetPosition() {
             if (!currentModel) return;
             currentModel.position.set(0, 0, 0);
@@ -265,9 +242,11 @@
                 slider.nextElementSibling.textContent = '0';
             });
         }
+
         function kelvinToRGB(kelvin) {
             const temp = kelvin / 100;
             let r, g, b;
+
             if (temp <= 66) {
                 r = 255;
                 g = temp;
@@ -285,12 +264,14 @@
                 g = 288.1221695283 * Math.pow(g, -0.0755148492);
                 b = 255;
             }
+
             return {
                 r: Math.min(255, Math.max(0, r)) / 255,
                 g: Math.min(255, Math.max(0, g)) / 255,
                 b: Math.min(255, Math.max(0, b)) / 255
             };
         }
+
         function showMessage(text, color) {
             const messageEl = document.getElementById('message');
             messageEl.style.display = 'block';
@@ -299,7 +280,6 @@
             setTimeout(() => messageEl.style.display = 'none', 3000);
         }
 
-            reader.readAsDataURL(file);
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -309,26 +289,10 @@
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            
-            // Use composer instead of renderer directly
-            if (composer) {
-                composer.render();
-            } else {
-                if (composer) {
-                composer.render();
-            } else {
-                if (composer && lutPass && lutPass.enabled) {
-                composer.render();
-            } else {
-                renderer.render(scene, camera);
-            }
-            }
-            }
             renderer.render(scene, camera);
         }
 
-        // Previous functions remain the same
-        // ... (keep all other existing functions)
         init();
     </script>
 </body>
+</html>
