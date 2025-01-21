@@ -186,7 +186,7 @@
                 document.getElementById(`position-${axis}`).addEventListener('input', e => {
                     if (!currentModel) return;
                     const value = parseFloat(e.target.value);
-                    currentModel.position[axis] = axis === 'x' || axis === 'z' ? -value : value;
+                    currentModel.position[axis] = axis === 'z' ? -value : value;
                     e.target.nextElementSibling.textContent = value;
                 });
             });
