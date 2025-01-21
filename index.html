@@ -128,247 +128,47 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
-      function setupListeners() {
-            document.getElementById('file-input').addEventListener('change', loadModel);
-            document.getElementById('lut-input').addEventListener('change', loadLUT);
+        let scene, camera, renderer, controls, currentModel;
+        let ambientLight, directionalLight;
+        let lutTexture = null;
+        let lutMixValue = 1.0;
+        let previewCanvas, previewCtx;
+
+        function init() {
+            // Initialize preview canvas for LUT processing
+            previewCanvas = document.getElementById('preview-canvas');
+            previewCtx = previewCanvas.getContext('2d');
             
-            document.getElementById('lut-mix').addEventListener('input', e => {
-                lutMixValue = parseFloat(e.target.value);
-                e.target.nextElementSibling.textContent = lutMixValue.toFixed(2);
-            });
-            
-            document.getElementById('ambient-intensity').addEventListener('input', e => {
-                ambientLight.intensity = parseFloat(e.target.value);
-                e.target.nextElementSibling.textContent = e.target.value;
-            });
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
 
-            document.getElementById('direct-intensity').addEventListener('input', e => {
-                directionalLight.intensity = parseFloat(e.target.value);
-                e.target.nextElementSibling.textContent = e.target.value;
-            });
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(2, 2, 2);
+            camera.lookAt(0, 0, 0);
 
-            document.getElementById('exposure').addEventListener('input', e => {
-                renderer.toneMappingExposure = parseFloat(e.target.value);
-                e.target.nextElementSibling.textContent = e.target.value;
-            });
-
-            document.getElementById('temperature').addEventListener('input', e => {
-                const temp = parseInt(e.target.value);
-                const rgb = kelvinToRGB(temp);
-                const color = new THREE.Color(rgb.r, rgb.g, rgb.b);
-                ambientLight.color.copy(color);
-                directionalLight.color.copy(color);
-                e.target.nextElementSibling.textContent = temp + 'K';
-            });
-
-            document.getElementById('bg-color').addEventListener('input', e => {
-                scene.background = new THREE.Color(e.target.value);
-            });
-
-            document.getElementById('reset-camera').addEventListener('click', () => {
-                camera.position.set(2, 2, 2);
-                camera.lookAt(0, 0, 0);
-                controls.target.set(0, 0, 0);
-                controls.update();
-            });
-
-            document.getElementById('reset-position').addEventListener('click', resetPosition);
-
-            ['x', 'y', 'z'].forEach(axis => {
-                document.getElementById(`position-${axis}`).addEventListener('input', e => {
-                    if (!currentModel) return;
-                    const value = parseFloat(e.target.value);
-                    currentModel.position[axis] = axis === 'x' || axis === 'z' ? -value : value;
-                    e.target.nextElementSibling.textContent = value;
-                });
-            });
-
-            window.addEventListener('resize', onWindowResize, false);
-        }
-
-        function loadLUT(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const content = e.target.result;
-                parseLUT(content);
-            };
-            reader.readAsText(file);
-        }
-
-        function parseLUT(content) {
-            const lines = content.split('\n');
-            const lutSize = 32; // Default size, you might want to parse this from the file
-            const lutData = new Uint8Array(lutSize * lutSize * lutSize * 4);
-            
-            let dataIndex = 0;
-            for (let line of lines) {
-                line = line.trim();
-                if (line && !line.startsWith('#')) {
-                    const [r, g, b] = line.split(' ').map(v => parseFloat(v));
-                    lutData[dataIndex] = r * 255;
-                    lutData[dataIndex + 1] = g * 255;
-                    lutData[dataIndex + 2] = b * 255;
-                    lutData[dataIndex + 3] = 255;
-                    dataIndex += 4;
-                }
-            }
-
-            lutTexture = new THREE.DataTexture(lutData, lutSize, lutSize * lutSize, THREE.RGBAFormat);
-            lutTexture.needsUpdate = true;
-            
-            showMessage('LUT loaded successfully!', 'green');
-        }
-
-        function applyLUT(sourceImageData) {
-            if (!lutTexture) return sourceImageData;
-
-            const lutSize = Math.cbrt(lutTexture.image.data.length / 4);
-            const pixels = sourceImageData.data;
-            
-            for (let i = 0; i < pixels.length; i += 4) {
-                const r = pixels[i] / 255;
-                const g = pixels[i + 1] / 255;
-                const b = pixels[i + 2] / 255;
-
-                // Get interpolated color from LUT
-                const rx = Math.floor(r * (lutSize - 1));
-                const gx = Math.floor(g * (lutSize - 1));
-                const bx = Math.floor(b * (lutSize - 1));
-
-                const idx = (bx * lutSize * lutSize + gx * lutSize + rx) * 4;
-                
-                // Mix between original and LUT color
-                pixels[i] = pixels[i] * (1 - lutMixValue) + lutTexture.image.data[idx] * lutMixValue;
-                pixels[i + 1] = pixels[i + 1] * (1 - lutMixValue) + lutTexture.image.data[idx + 1] * lutMixValue;
-                pixels[i + 2] = pixels[i + 2] * (1 - lutMixValue) + lutTexture.image.data[idx + 2] * lutMixValue;
-            }
-
-            return sourceImageData;
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-
-            // Apply LUT processing
-            if (lutTexture) {
-                const gl = renderer.getContext();
-                const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
-                gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-                const imageData = new ImageData(
-                    new Uint8ClampedArray(pixels),
-                    gl.drawingBufferWidth,
-                    gl.drawingBufferHeight
-                );
-
-                const processedImageData = applyLUT(imageData);
-                previewCtx.putImageData(processedImageData, 0, 0);
-            }
-        }
-
-        function loadModel(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const loader = new THREE.GLTFLoader();
-            const reader = new FileReader();
-
-            showMessage('Loading model...', 'blue');
-
-            reader.onload = function(e) {
-                loader.parse(e.target.result, '', function(gltf) {
-                    if (currentModel) scene.remove(currentModel);
-                    
-                    currentModel = gltf.scene;
-                    
-                    const box = new THREE.Box3().setFromObject(currentModel);
-                    const center = box.getCenter(new THREE.Vector3());
-                    const size = box.getSize(new THREE.Vector3());
-                    
-                    currentModel.position.x = -center.x;
-                    currentModel.position.y = -center.y;
-                    currentModel.position.z = -center.z;
-                    
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    const scale = 2 / maxDim;
-                    currentModel.scale.multiplyScalar(scale);
-                    
-                    scene.add(currentModel);
-                    resetPosition();
-                    
-                    showMessage('Model loaded successfully!', 'green');
-                }, undefined, function(error) {
-                    showMessage('Error loading model: ' + error.message, 'red');
-                });
-            };
-            
-            reader.readAsArrayBuffer(file);
-        }
-
-        function resetPosition() {
-            if (!currentModel) return;
-            currentModel.position.set(0, 0, 0);
-            ['x', 'y', 'z'].forEach(axis => {
-                const slider = document.getElementById(`position-${axis}`);
-                slider.value = 0;
-                slider.nextElementSibling.textContent = '0';
-            });
-        }
-
-        function kelvinToRGB(kelvin) {
-            const temp = kelvin / 100;
-            let r, g, b;
-
-            if (temp <= 66) {
-                r = 255;
-                g = temp;
-                g = 99.4708025861 * Math.log(g) - 161.1195681661;
-                if (temp <= 19) {
-                    b = 0;
-                } else {
-                    b = temp - 10;
-                    b = 138.5177312231 * Math.log(b) - 305.0447927307;
-                }
-            } else {
-                r = temp - 60;
-                r = 329.698727446 * Math.pow(r, -0.1332047592);
-                g = temp - 60;
-                g = 288.1221695283 * Math.pow(g, -0.0755148492);
-                b = 255;
-            }
-
-            return {
-                r: Math.min(255, Math.max(0, r)) / 255,
-                g: Math.min(255, Math.max(0, g)) / 255,
-                b: Math.min(255, Math.max(0, b)) / 255
-            };
-        }
-
-        function showMessage(text, color) {
-            const messageEl = document.getElementById('message');
-            messageEl.style.display = 'block';
-            messageEl.style.color = color;
-            messageEl.textContent = text;
-            setTimeout(() => messageEl.style.display = 'none', 3000);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            
-            // Update preview canvas size
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            document.body.appendChild(renderer.domElement);
+
+            // Set preview canvas size
             previewCanvas.width = window.innerWidth;
             previewCanvas.height = window.innerHeight;
-        }
 
-        // Initialize the application
-        init();
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(2, 2, 2);
+            scene.add(directionalLight);
+
+            setupListeners();
+            animate();
         }
 </script>
 </body>
