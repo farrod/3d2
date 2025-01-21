@@ -1,33 +1,167 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Basic 3D Model Viewer</title>
+    <title>3D Model Viewer</title>
     <style>
         body { 
-            margin: 0;
+            margin: 0; 
+            font-family: Arial, sans-serif;
             overflow: hidden;
         }
-        #controls {
+        #controls-panel {
             position: fixed;
             top: 20px;
             left: 20px;
+            z-index: 100;
             background: rgba(255, 255, 255, 0.9);
-            padding: 20px;
+            padding: 15px;
             border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 300px;
+        }
+        .control-group {
+            margin-top: 10px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.95);
+        }
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        .slider-container {
+            display: grid;
+            grid-template-columns: 100px 1fr 40px;
+            gap: 10px;
+            align-items: center;
+            margin: 8px 0;
+        }
+        .file-input-container {
+            margin: 10px 0;
+        }
+        .file-input-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        .file-input-container input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+            font-size: 12px;
+        }
+        button:hover {
+            background: #45a049;
         }
         #message {
             margin-top: 10px;
-            padding: 10px;
+            padding: 8px;
+            border-radius: 4px;
             display: none;
+            font-weight: bold;
+        }
+        #preview-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
-    <div id="controls">
-        <div>
-            <label>Load 3D Model (.glb/.gltf):</label><br>
-            <input type="file" id="model-input" accept=".glb,.gltf"><br>
+    <canvas id="preview-canvas"></canvas>
+    <div id="controls-panel">
+        <div class="control-group">
+            <h3>Model Controls</h3>
+            <div class="file-input-container">
+                <label>Load 3D Model (.glb, .gltf):</label>
+                <input type="file" id="file-input" accept=".glb,.gltf">
+            </div>
         </div>
+
+        <div class="control-group">
+            <h3>LUT Controls</h3>
+            <div class="file-input-container">
+                <label>Load LUT File (.cube, .3dl):</label>
+                <input type="file" id="lut-input" accept=".cube,.3dl">
+            </div>
+            <div class="slider-container">
+                <label>LUT Mix:</label>
+                <input type="range" id="lut-mix" min="0" max="1" step="0.01" value="1">
+                <span>1.0</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Lighting Controls</h3>
+            <div class="slider-container">
+                <label>Ambient:</label>
+                <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
+                <span>0.5</span>
+            </div>
+            <div class="slider-container">
+                <label>Direct:</label>
+                <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
+                <span>1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Exposure:</label>
+                <input type="range" id="exposure" min="0" max="2" step="0.1" value="1.0">
+                <span>1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Temperature:</label>
+                <input type="range" id="temperature" min="1000" max="10000" step="100" value="6500">
+                <span>6500K</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>Position Controls</h3>
+            <div class="slider-container">
+                <label>Left/Right:</label>
+                <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
+                <span>0</span>
+            </div>
+            <div class="slider-container">
+                <label>Up/Down:</label>
+                <input type="range" id="position-y" min="-5" max="5" step="0.1" value="0">
+                <span>0</span>
+            </div>
+            <div class="slider-container">
+                <label>Front/Back:</label>
+                <input type="range" id="position-z" min="-5" max="5" step="0.1" value="0">
+                <span>0</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>Scene Controls</h3>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <label>Background:</label>
+                <input type="color" id="bg-color" value="#f0f0f0">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="reset-camera">Reset View</button>
+                <button id="reset-position">Reset Position</button>
+            </div>
+        </div>
+
         <div id="message"></div>
     </div>
 
@@ -37,41 +171,51 @@
 
     <script>
         let scene, camera, renderer, controls, currentModel;
+        let ambientLight, directionalLight;
+        let lutTexture = null;
+        let lutMixValue = 1.0;
+        let previewCanvas, previewCtx;
 
         function init() {
             // Scene
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x808080);
+            scene.background = new THREE.Color(0xf0f0f0);
 
             // Camera
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 1, 3);
 
             // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                preserveDrawingBuffer: true 
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
+
+            // Preview canvas
+            previewCanvas = document.getElementById('preview-canvas');
+            previewCtx = previewCanvas.getContext('2d');
+            previewCanvas.width = window.innerWidth;
+            previewCanvas.height = window.innerHeight;
 
             // Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
 
             // Lights
-            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambient);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
 
-            const directional = new THREE.DirectionalLight(0xffffff, 0.8);
-            directional.position.set(1, 1, 1);
-            scene.add(directional);
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(directionalLight);
 
-            // Grid
-            const grid = new THREE.GridHelper(10, 10);
-            scene.add(grid);
-
-            // Event listeners
-            window.addEventListener('resize', onWindowResize, false);
-            document.getElementById('model-input').addEventListener('change', loadModel);
-
+            setupListeners();
             animate();
         }
 
@@ -115,26 +259,205 @@
             reader.readAsArrayBuffer(file);
         }
 
-        function showMessage(text, color) {
-            const message = document.getElementById('message');
-            message.style.display = 'block';
-            message.style.color = color;
-            message.textContent = text;
-            setTimeout(() => message.style.display = 'none', 3000);
+        function setupListeners() {
+            document.getElementById('file-input').addEventListener('change', loadModel);
+            document.getElementById('lut-input').addEventListener('change', loadLUT);
+            
+            document.getElementById('lut-mix').addEventListener('input', e => {
+                lutMixValue = parseFloat(e.target.value);
+                e.target.nextElementSibling.textContent = lutMixValue.toFixed(2);
+            });
+            
+            document.getElementById('ambient-intensity').addEventListener('input', e => {
+                ambientLight.intensity = parseFloat(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('direct-intensity').addEventListener('input', e => {
+                directionalLight.intensity = parseFloat(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('exposure').addEventListener('input', e => {
+                renderer.toneMappingExposure = parseFloat(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('temperature').addEventListener('input', e => {
+                const temp = parseInt(e.target.value);
+                const rgb = kelvinToRGB(temp);
+                const color = new THREE.Color(rgb.r, rgb.g, rgb.b);
+                ambientLight.color.copy(color);
+                directionalLight.color.copy(color);
+                e.target.nextElementSibling.textContent = temp + 'K';
+            });
+
+            document.getElementById('bg-color').addEventListener('input', e => {
+                scene.background = new THREE.Color(e.target.value);
+            });
+
+            document.getElementById('reset-camera').addEventListener('click', () => {
+                camera.position.set(0, 1, 3);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            });
+
+            document.getElementById('reset-position').addEventListener('click', resetPosition);
+
+            ['x', 'y', 'z'].forEach(axis => {
+                document.getElementById(`position-${axis}`).addEventListener('input', e => {
+                    if (!currentModel) return;
+                    const value = parseFloat(e.target.value);
+                    currentModel.position[axis] = value;
+                    e.target.nextElementSibling.textContent = value;
+                });
+            });
+
+            window.addEventListener('resize', onWindowResize, false);
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        function loadLUT(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                parseLUT(content);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseLUT(content) {
+            const lines = content.split('\n');
+            const lutSize = 32;
+            const lutData = new Uint8Array(lutSize * lutSize * lutSize * 4);
+            
+            let dataIndex = 0;
+            for (let line of lines) {
+                line = line.trim();
+                if (line && !line.startsWith('#')) {
+                    const [r, g, b] = line.split(' ').map(v => parseFloat(v));
+                    lutData[dataIndex] = r * 255;
+                    lutData[dataIndex + 1] = g * 255;
+                    lutData[dataIndex + 2] = b * 255;
+                    lutData[dataIndex + 3] = 255;
+                    dataIndex += 4;
+                }
+            }
+
+            lutTexture = new THREE.DataTexture(lutData, lutSize, lutSize * lutSize, THREE.RGBAFormat);
+            lutTexture.needsUpdate = true;
+            
+            showMessage('LUT loaded successfully!', '#009933');
+        }
+
+        function applyLUT(sourceImageData) {
+            if (!lutTexture) return sourceImageData;
+
+            const lutSize = Math.cbrt(lutTexture.image.data.length / 4);
+            const pixels = sourceImageData.data;
+            
+            for (let i = 0; i < pixels.length; i += 4) {
+                const r = pixels[i] / 255;
+                const g = pixels[i + 1] / 255;
+                const b = pixels[i + 2] / 255;
+
+                const rx = Math.floor(r * (lutSize - 1));
+                const gx = Math.floor(g * (lutSize - 1));
+                const bx = Math.floor(b * (lutSize - 1));
+
+                const idx = (bx * lutSize * lutSize + gx * lutSize + rx) * 4;
+                
+                pixels[i] = pixels[i] * (1 - lutMixValue) + lutTexture.image.data[idx] * lutMixValue;
+                pixels[i + 1] = pixels[i + 1] * (1 - lutMixValue) + lutTexture.image.data[idx + 1] * lutM
+                pixels[i + 1] = pixels[i + 1] * (1 - lutMixValue) + lutTexture.image.data[idx + 1] * lutMixValue;
+                pixels[i + 2] = pixels[i + 2] * (1 - lutMixValue) + lutTexture.image.data[idx + 2] * lutMixValue;
+            }
+
+            return sourceImageData;
         }
 
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
             renderer.render(scene, camera);
+
+            // Apply LUT processing
+            if (lutTexture) {
+                const gl = renderer.getContext();
+                const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+                gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+                const imageData = new ImageData(
+                    new Uint8ClampedArray(pixels),
+                    gl.drawingBufferWidth,
+                    gl.drawingBufferHeight
+                );
+
+                const processedImageData = applyLUT(imageData);
+                previewCtx.putImageData(processedImageData, 0, 0);
+            }
         }
 
+        function resetPosition() {
+            if (!currentModel) return;
+            currentModel.position.set(0, 0, 0);
+            ['x', 'y', 'z'].forEach(axis => {
+                const slider = document.getElementById(`position-${axis}`);
+                slider.value = 0;
+                slider.nextElementSibling.textContent = '0';
+            });
+        }
+
+        function kelvinToRGB(kelvin) {
+            const temp = kelvin / 100;
+            let r, g, b;
+
+            if (temp <= 66) {
+                r = 255;
+                g = temp;
+                g = 99.4708025861 * Math.log(g) - 161.1195681661;
+                if (temp <= 19) {
+                    b = 0;
+                } else {
+                    b = temp - 10;
+                    b = 138.5177312231 * Math.log(b) - 305.0447927307;
+                }
+            } else {
+                r = temp - 60;
+                r = 329.698727446 * Math.pow(r, -0.1332047592);
+                g = temp - 60;
+                g = 288.1221695283 * Math.pow(g, -0.0755148492);
+                b = 255;
+            }
+
+            return {
+                r: Math.min(255, Math.max(0, r)) / 255,
+                g: Math.min(255, Math.max(0, g)) / 255,
+                b: Math.min(255, Math.max(0, b)) / 255
+            };
+        }
+
+        function showMessage(text, color) {
+            const messageEl = document.getElementById('message');
+            messageEl.style.display = 'block';
+            messageEl.style.color = color;
+            messageEl.textContent = text;
+            setTimeout(() => messageEl.style.display = 'none', 3000);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            previewCanvas.width = window.innerWidth;
+            previewCanvas.height = window.innerHeight;
+        }
+
+        // Initialize everything
         init();
     </script>
 </body>
