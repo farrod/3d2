@@ -99,10 +99,15 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/LUTPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/LUTCubeLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/LUTPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/LUTCubeLoader.js"></script>
 
     <script>
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
+        let composer, lutPass;
         let composer, lutPass;
         let composer, lutPass, renderPass;
         let lutEnabled = false;
@@ -215,7 +220,11 @@
                 if (composer) {
                 composer.render();
             } else {
+                if (composer && lutPass && lutPass.enabled) {
+                composer.render();
+            } else {
                 renderer.render(scene, camera);
+            }
             }
             }
         }
