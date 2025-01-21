@@ -107,6 +107,19 @@
             </div>
         </div>
         <div class="control-group">
+            <label>Lens Effects:</label>
+            <div class="slider-container">
+                <label>Focal Length:</label>
+                <input type="range" id="focal-length" min="10" max="200" step="1" value="50">
+                <span>50mm</span>
+            </div>
+            <div class="slider-container">
+                <label>Distortion:</label>
+                <input type="range" id="barrel-distortion" min="-1" max="1" step="0.01" value="0">
+                <span>0.00</span>
+            </div>
+        </div>
+        <div class="control-group">
             <button id="reset-camera">Reset Camera</button>
             <button id="wireframe-toggle">Toggle Wireframe</button>
             <button id="reset-position">Reset Position</button>
@@ -118,9 +131,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
     <script>
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
+        let composer, renderPass;
         const messageEl = document.getElementById('message');
         const statsEl = document.getElementById('stats');
         let isWireframe = false;
@@ -161,6 +179,58 @@
             directionalLight.position.set(5, 5, 5);
             directionalLight.castShadow = true;
             scene.add(directionalLight);
+
+            // Post-processing setup
+            composer = new THREE.EffectComposer(renderer);
+            renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            // Create and add lens distortion shader
+            const vertexShader = `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `;
+
+            const fragmentShader = `
+                uniform float distortion;
+                uniform float focalLength;
+                varying vec2 vUv;
+                uniform sampler2D tDiffuse;
+
+                vec2 distort(vec2 p) {
+                    float d = length(p);
+                    float z = sqrt(1.0 + d * d * distortion);
+                    float r = (1.0 / focalLength) * atan(d * z) / d;
+                    return p * r;
+                }
+
+                void main() {
+                    vec2 p = (vUv * 2.0 - 1.0);
+                    vec2 s = distort(p);
+                    vec2 uv = (s + 1.0) * 0.5;
+                    
+                    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    } else {
+                        gl_FragColor = texture2D(tDiffuse, uv);
+                    }
+                }
+            `;
+
+            const lensDistortionPass = new THREE.ShaderPass({
+                uniforms: {
+                    tDiffuse: { value: null },
+                    distortion: { value: 0.0 },
+                    focalLength: { value: 50.0 }
+                },
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader
+            });
+            lensDistortionPass.renderToScreen = true;
+            composer.addPass(lensDistortionPass);
 
             setupEventListeners();
             animate();
@@ -237,7 +307,20 @@
                 }
             });
 
-            // Window resize handler
+            // Lens distortion controls
+            document.getElementById('focal-length').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                const lastPass = composer.passes[composer.passes.length - 1];
+                lastPass.uniforms.focalLength.value = value;
+                this.nextElementSibling.textContent = value + 'mm';
+            });
+
+            document.getElementById('barrel-distortion').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                const lastPass = composer.passes[composer.passes.length - 1];
+                lastPass.uniforms.distortion.value = value;
+                this.nextElementSibling.textContent = value.toFixed(2);
+            });
             window.addEventListener('resize', onWindowResize);
         }
 
@@ -353,10 +436,11 @@
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            renderer.render(scene, camera);
+            composer.render();
         }
 
         init();
     </script>
 </body>
 </html>
+             
