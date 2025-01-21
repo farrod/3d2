@@ -1,76 +1,161 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Model Viewer</title>
+    <title>Enhanced 3D Model Viewer</title>
     <style>
-        body { margin: 0; }
-        #file-input {
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif;
+        }
+        #controls-panel {
             position: absolute;
             top: 20px;
             left: 20px;
             z-index: 100;
-            background: white;
-            padding: 10px;
-            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #file-input {
+            margin-bottom: 10px;
         }
         #message {
-            position: absolute;
-            top: 60px;
-            left: 20px;
-            background: white;
-            padding: 10px;
+            margin-top: 10px;
+            padding: 8px;
             border-radius: 4px;
             display: none;
+        }
+        .control-group {
+            margin-top: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #loading-spinner {
+            display: none;
+            margin-left: 10px;
+        }
+        #stats {
+            margin-top: 10px;
+            font-size: 0.9em;
         }
     </style>
 </head>
 <body>
-    <input type="file" id="file-input" accept=".glb,.gltf">
-    <div id="message"></div>
+    <div id="controls-panel">
+        <input type="file" id="file-input" accept=".glb,.gltf">
+        <div class="control-group">
+            <label>Background Color:</label>
+            <input type="color" id="bg-color" value="#f0f0f0">
+        </div>
+        <div class="control-group">
+            <button id="reset-camera">Reset Camera</button>
+            <button id="wireframe-toggle">Toggle Wireframe</button>
+        </div>
+        <div id="message"></div>
+        <div id="loading-spinner">Loading...</div>
+        <div id="stats"></div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
-        let scene, camera, renderer, controls;
+        let scene, camera, renderer, controls, currentModel;
         const messageEl = document.getElementById('message');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const statsEl = document.getElementById('stats');
+        let isWireframe = false;
 
-        // Initialize scene
         function init() {
+            // Scene setup
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf0f0f0);
 
+            // Camera setup with better initial position
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 5;
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            // Renderer setup with better quality
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                preserveDrawingBuffer: true 
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
+            // Enhanced controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = true;
+            controls.maxDistance = 100;
+            controls.minDistance = 1;
 
-            // Add lights
+            // Improved lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            directionalLight.position.set(0, 1, 0);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 5, 5);
+            directionalLight.castShadow = true;
             scene.add(directionalLight);
 
+            // Add grid helper
+            const gridHelper = new THREE.GridHelper(10, 10);
+            scene.add(gridHelper);
+
+            setupEventListeners();
             animate();
         }
 
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
+        function setupEventListeners() {
+            // File input handler
+            document.getElementById('file-input').addEventListener('change', handleFileUpload);
+
+            // Background color control
+            document.getElementById('bg-color').addEventListener('input', function(e) {
+                scene.background = new THREE.Color(e.target.value);
+            });
+
+            // Camera reset
+            document.getElementById('reset-camera').addEventListener('click', function() {
+                camera.position.set(5, 5, 5);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            });
+
+            // Wireframe toggle
+            document.getElementById('wireframe-toggle').addEventListener('click', toggleWireframe);
+
+            // Window resize handler
+            window.addEventListener('resize', onWindowResize);
         }
 
-        // Handle file upload
-        document.getElementById('file-input').addEventListener('change', function(event) {
+        function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            loadingSpinner.style.display = 'inline';
+            showMessage('Loading model...', 'blue');
 
             const loader = new THREE.GLTFLoader();
             const reader = new FileReader();
@@ -78,51 +163,104 @@
             reader.onload = function(e) {
                 loader.parse(e.target.result, '', function(gltf) {
                     // Remove existing model
-                    scene.children = scene.children.filter(child => child.type === 'Light');
+                    if (currentModel) {
+                        scene.remove(currentModel);
+                    }
                     
-                    // Add new model
-                    scene.add(gltf.scene);
+                    currentModel = gltf.scene;
+                    scene.add(currentModel);
 
                     // Center and scale model
-                    const box = new THREE.Box3().setFromObject(gltf.scene);
+                    const box = new THREE.Box3().setFromObject(currentModel);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
 
-                    gltf.scene.position.x = -center.x;
-                    gltf.scene.position.y = -center.y;
-                    gltf.scene.position.z = -center.z;
+                    currentModel.position.x = -center.x;
+                    currentModel.position.y = -center.y;
+                    currentModel.position.z = -center.z;
 
                     const maxDim = Math.max(size.x, size.y, size.z);
                     const scale = 2 / maxDim;
-                    gltf.scene.scale.multiplyScalar(scale);
+                    currentModel.scale.multiplyScalar(scale);
 
+                    // Update stats
+                    updateModelStats(gltf);
+
+                    loadingSpinner.style.display = 'none';
                     showMessage('Model loaded successfully!', 'green');
                 }, undefined, function(error) {
+                    loadingSpinner.style.display = 'none';
                     showMessage('Error loading model: ' + error.message, 'red');
                 });
             };
 
             reader.readAsArrayBuffer(file);
-        });
+        }
 
-        // Show message
+        function updateModelStats(gltf) {
+            let vertexCount = 0;
+            let triangleCount = 0;
+            let materialCount = 0;
+            const materials = new Set();
+
+            gltf.scene.traverse((node) => {
+                if (node.isMesh) {
+                    const geometry = node.geometry;
+                    vertexCount += geometry.attributes.position.count;
+                    if (geometry.index) {
+                        triangleCount += geometry.index.count / 3;
+                    } else {
+                        triangleCount += geometry.attributes.position.count / 3;
+                    }
+                    if (node.material) {
+                        materials.add(node.material);
+                    }
+                }
+            });
+
+            statsEl.innerHTML = `
+                <strong>Model Statistics:</strong><br>
+                Vertices: ${vertexCount.toLocaleString()}<br>
+                Triangles: ${Math.floor(triangleCount).toLocaleString()}<br>
+                Materials: ${materials.size}
+            `;
+        }
+
+        function toggleWireframe() {
+            isWireframe = !isWireframe;
+            if (currentModel) {
+                currentModel.traverse((node) => {
+                    if (node.isMesh) {
+                        node.material.wireframe = isWireframe;
+                    }
+                });
+            }
+        }
+
         function showMessage(text, color) {
             messageEl.style.display = 'block';
             messageEl.style.color = color;
+            messageEl.style.background = color === 'red' ? '#ffe6e6' : 
+                                       color === 'green' ? '#e6ffe6' : 
+                                       '#e6f3ff';
             messageEl.textContent = text;
             setTimeout(() => {
                 messageEl.style.display = 'none';
             }, 3000);
         }
 
-        // Handle window resize
-        window.addEventListener('resize', function() {
+        function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        }
 
-        // Start everything
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
         init();
     </script>
 </body>
