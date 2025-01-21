@@ -1,4 +1,35 @@
-<!DOCTYPE html>
+// Event Listeners
+            window.addEventListener('resize', onWindowResize, false);
+            document.getElementById('file-input').addEventListener('change', loadModel);
+            document.getElementById('bg-color').addEventListener('input', e => {
+                scene.background = new THREE.Color(e.target.value);
+            });
+            
+            // Lighting controls
+            document.getElementById('ambient-intensity').addEventListener('input', e => {
+                const value = parseFloat(e.target.value);
+                ambientLight.intensity = value;
+                e.target.nextElementSibling.textContent = value.toFixed(1);
+            });
+
+            document.getElementById('direct-intensity').addEventListener('input', e => {
+                const value = parseFloat(e.target.value);
+                directionalLight.intensity = value;
+                e.target.nextElementSibling.textContent = value.toFixed(1);
+            });
+
+            document.getElementById('exposure').addEventListener('input', e => {
+                const value = parseFloat(e.target.value);
+                renderer.toneMappingExposure = value;
+                e.target.nextElementSibling.textContent = value.toFixed(1);
+            });
+
+            document.getElementById('light-temp').addEventListener('input', e => {
+                const temp = parseInt(e.target.value);
+                const color = kelvinToRGB(temp);
+                ambientLight.color.setRGB(color.r, color.g, color.b);
+                directionalLight.color.setRGB(color.r, color.g, color.b);
+                document.getElementById('light-color').value = '#' + new THREE.Color(color.r, color.g, c<!DOCTYPE html>
 <html>
 <head>
     <title>3D Model Viewer</title>
@@ -84,11 +115,33 @@
         <div class="control-group">
             <label>Lighting:</label>
             <div class="slider-container">
-                <label>Brightness:</label>
-                <input type="range" id="light-intensity" min="0" max="2" step="0.1" value="1">
+                <label>Ambient Light:</label>
+                <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
+                <span>0.5</span>
+            </div>
+            <div class="slider-container">
+                <label>Direct Light:</label>
+                <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
                 <span>1.0</span>
             </div>
-            <input type="color" id="bg-color" value="#f0f0f0">
+            <div class="slider-container">
+                <label>Exposure:</label>
+                <input type="range" id="exposure" min="0" max="2" step="0.1" value="1">
+                <span>1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Light Temperature:</label>
+                <input type="range" id="light-temp" min="1000" max="10000" step="100" value="6500">
+                <span>6500K</span>
+            </div>
+            <div style="margin-top: 8px;">
+                <label>Light Color:</label>
+                <input type="color" id="light-color" value="#ffffff">
+            </div>
+            <div style="margin-top: 8px;">
+                <label>Background:</label>
+                <input type="color" id="bg-color" value="#f0f0f0">
+            </div>
         </div>
         <div class="control-group">
             <button id="reset-camera">Reset View</button>
@@ -105,7 +158,7 @@
 
     <script>
         let scene, camera, renderer, controls, currentModel;
-        let light;
+        let ambientLight, directionalLight;
         let isWireframe = false;
 
         function init() {
@@ -118,10 +171,12 @@
             camera.position.set(2, 2, 2);
             camera.lookAt(0, 0, 0);
 
-            // Renderer
+            // Renderer with tone mapping
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
 
             // Controls
@@ -129,12 +184,12 @@
             controls.enableDamping = true;
 
             // Lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
 
-            light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(2, 2, 2);
-            scene.add(light);
+            directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(2, 2, 2);
+            scene.add(directionalLight);
 
             // Event Listeners
             window.addEventListener('resize', onWindowResize, false);
