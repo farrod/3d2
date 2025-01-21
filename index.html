@@ -1,15 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Model Viewer with Shader LUT</title>
+    <title>3D Model Viewer</title>
     <style>
         body { 
             margin: 0; 
             font-family: Arial, sans-serif;
-            overflow: hidden;
         }
         #controls-panel {
-            position: fixed;
+            position: absolute;
             top: 20px;
             left: 20px;
             z-index: 100;
@@ -17,43 +16,19 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            min-width: 300px;
         }
         .control-group {
             margin-top: 10px;
-            padding: 12px;
+            padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            background: rgba(255, 255, 255, 0.95);
-        }
-        .control-group h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #333;
         }
         .slider-container {
             display: grid;
             grid-template-columns: 100px 1fr 40px;
             gap: 10px;
             align-items: center;
-            margin: 8px 0;
-        }
-        .file-input-container {
-            margin: 10px 0;
-        }
-        .file-input-container label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #333;
-        }
-        .file-input-container input[type="file"] {
-            display: block;
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: white;
+            margin: 5px 0;
         }
         button {
             background: #4CAF50;
@@ -63,7 +38,6 @@
             border-radius: 4px;
             cursor: pointer;
             margin: 2px;
-            font-size: 12px;
         }
         button:hover {
             background: #45a049;
@@ -73,43 +47,14 @@
             padding: 8px;
             border-radius: 4px;
             display: none;
-            font-weight: bold;
-        }
-        #container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
         }
     </style>
 </head>
 <body>
-    <div id="container"></div>
     <div id="controls-panel">
-        <div class="control-group">
-            <h3>Model Controls</h3>
-            <div class="file-input-container">
-                <label>Load 3D Model (.glb, .gltf):</label>
-                <input type="file" id="file-input" accept=".glb,.gltf">
-            </div>
-        </div>
-
-        <div class="control-group">
-            <h3>LUT Controls</h3>
-            <div class="file-input-container">
-                <label>Load LUT File (.cube, .3dl):</label>
-                <input type="file" id="lut-input" accept=".cube,.3dl">
-            </div>
-            <div class="slider-container">
-                <label>LUT Mix:</label>
-                <input type="range" id="lut-mix" min="0" max="1" step="0.01" value="1">
-                <span>1.0</span>
-            </div>
-        </div>
+        <input type="file" id="file-input" accept=".glb,.gltf">
         
         <div class="control-group">
-            <h3>Lighting Controls</h3>
             <div class="slider-container">
                 <label>Ambient:</label>
                 <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
@@ -133,7 +78,6 @@
         </div>
 
         <div class="control-group">
-            <h3>Position Controls</h3>
             <div class="slider-container">
                 <label>Left/Right:</label>
                 <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
@@ -152,15 +96,10 @@
         </div>
 
         <div class="control-group">
-            <h3>Scene Controls</h3>
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                <label>Background:</label>
-                <input type="color" id="bg-color" value="#f0f0f0">
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button id="reset-camera">Reset View</button>
-                <button id="reset-position">Reset Position</button>
-            </div>
+            <label>Background:</label>
+            <input type="color" id="bg-color" value="#f0f0f0" style="margin-left: 10px;">
+            <button id="reset-camera">Reset View</button>
+            <button id="reset-position">Reset Position</button>
         </div>
 
         <div id="message"></div>
@@ -169,148 +108,42 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
 
     <script>
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
-        let composer, lutPass;
-        let lutTexture = null;
-        let lutMixValue = 1.0;
-
-        // Custom shader for LUT application
-        const LUTShader = {
-            uniforms: {
-                "tDiffuse": { value: null },
-                "lutMap": { value: null },
-                "lutSize": { value: 32.0 },
-                "intensity": { value: 1.0 }
-            },
-            vertexShader: `
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-            `,
-            fragmentShader: `
-                uniform sampler2D tDiffuse;
-                uniform sampler2D lutMap;
-                uniform float lutSize;
-                uniform float intensity;
-                varying vec2 vUv;
-
-                void main() {
-                    vec4 originalColor = texture2D(tDiffuse, vUv);
-                    vec4 lutColor = texture2D(lutMap, vUv);
-                    gl_FragColor = mix(originalColor, lutColor, intensity);
-                }
-            `
-        };
 
         function init() {
-            const container = document.getElementById('container');
-
-            // Scene setup
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf0f0f0);
 
-            // Camera setup
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1, 3);
+            camera.position.set(2, 2, 2);
+            camera.lookAt(0, 0, 0);
 
-            // Renderer setup
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            container.appendChild(renderer.domElement);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.0;
+            document.body.appendChild(renderer.domElement);
 
-            // Post-processing setup
-            composer = new THREE.EffectComposer(renderer);
-            const renderPass = new THREE.RenderPass(scene, camera);
-            composer.addPass(renderPass);
-
-            // Create LUT pass
-            lutPass = new THREE.ShaderPass(LUTShader);
-            lutPass.enabled = false;
-            composer.addPass(lutPass);
-
-            // Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
-            // Lights
             ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
 
             directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-            directionalLight.position.set(5, 5, 5);
+            directionalLight.position.set(2, 2, 2);
             scene.add(directionalLight);
 
             setupListeners();
             animate();
         }
 
-        // The rest of your functions (loadModel, setupListeners, etc.) go here
-        // Make sure to include all the utility functions we provided earlier
-
-        init();
-        <script>
-        function loadModel(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const loader = new THREE.GLTFLoader();
-            const reader = new FileReader();
-
-            showMessage('Loading model...', '#0066cc');
-
-            reader.onload = function(e) {
-                loader.parse(e.target.result, '', function(gltf) {
-                    if (currentModel) {
-                        scene.remove(currentModel);
-                    }
-
-                    currentModel = gltf.scene;
-
-                    // Center and scale model
-                    const box = new THREE.Box3().setFromObject(currentModel);
-                    const size = box.getSize(new THREE.Vector3());
-                    const center = box.getCenter(new THREE.Vector3());
-
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    const scale = 1 / maxDim;
-                    currentModel.scale.multiplyScalar(scale);
-
-                    currentModel.position.x = -center.x * scale;
-                    currentModel.position.y = -center.y * scale;
-                    currentModel.position.z = -center.z * scale;
-
-                    scene.add(currentModel);
-                    showMessage('Model loaded successfully!', '#009933');
-                }, undefined, function(error) {
-                    showMessage('Error loading model: ' + error.message, '#cc0000');
-                });
-            };
-
-            reader.readAsArrayBuffer(file);
-        }
-
         function setupListeners() {
             document.getElementById('file-input').addEventListener('change', loadModel);
-            document.getElementById('lut-input').addEventListener('change', loadLUT);
-            
-            document.getElementById('lut-mix').addEventListener('input', e => {
-                lutMixValue = parseFloat(e.target.value);
-                if (lutPass) {
-                    lutPass.uniforms.intensity.value = lutMixValue;
-                }
-                e.target.nextElementSibling.textContent = lutMixValue.toFixed(2);
-            });
             
             document.getElementById('ambient-intensity').addEventListener('input', e => {
                 ambientLight.intensity = parseFloat(e.target.value);
@@ -341,7 +174,7 @@
             });
 
             document.getElementById('reset-camera').addEventListener('click', () => {
-                camera.position.set(0, 1, 3);
+                camera.position.set(2, 2, 2);
                 camera.lookAt(0, 0, 0);
                 controls.target.set(0, 0, 0);
                 controls.update();
@@ -353,8 +186,113 @@
                 document.getElementById(`position-${axis}`).addEventListener('input', e => {
                     if (!currentModel) return;
                     const value = parseFloat(e.target.value);
-                    currentModel.position[axis] = value;
-                    e.target.nextElementSibling.textContent
+                    currentModel.position[axis] = axis === 'x' || axis === 'z' ? -value : value;
+                    e.target.nextElementSibling.textContent = value;
+                });
+            });
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function loadModel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const loader = new THREE.GLTFLoader();
+            const reader = new FileReader();
+
+            showMessage('Loading model...', 'blue');
+
+            reader.onload = function(e) {
+                loader.parse(e.target.result, '', function(gltf) {
+                    if (currentModel) scene.remove(currentModel);
+                    
+                    currentModel = gltf.scene;
+                    
+                    const box = new THREE.Box3().setFromObject(currentModel);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    
+                    currentModel.position.x = -center.x;
+                    currentModel.position.y = -center.y;
+                    currentModel.position.z = -center.z;
+                    
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = 2 / maxDim;
+                    currentModel.scale.multiplyScalar(scale);
+                    
+                    scene.add(currentModel);
+                    resetPosition();
+                    
+                    showMessage('Model loaded successfully!', 'green');
+                }, undefined, function(error) {
+                    showMessage('Error loading model: ' + error.message, 'red');
+                });
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        function resetPosition() {
+            if (!currentModel) return;
+            currentModel.position.set(0, 0, 0);
+            ['x', 'y', 'z'].forEach(axis => {
+                const slider = document.getElementById(`position-${axis}`);
+                slider.value = 0;
+                slider.nextElementSibling.textContent = '0';
+            });
+        }
+
+        function kelvinToRGB(kelvin) {
+            const temp = kelvin / 100;
+            let r, g, b;
+
+            if (temp <= 66) {
+                r = 255;
+                g = temp;
+                g = 99.4708025861 * Math.log(g) - 161.1195681661;
+                if (temp <= 19) {
+                    b = 0;
+                } else {
+                    b = temp - 10;
+                    b = 138.5177312231 * Math.log(b) - 305.0447927307;
+                }
+            } else {
+                r = temp - 60;
+                r = 329.698727446 * Math.pow(r, -0.1332047592);
+                g = temp - 60;
+                g = 288.1221695283 * Math.pow(g, -0.0755148492);
+                b = 255;
+            }
+
+            return {
+                r: Math.min(255, Math.max(0, r)) / 255,
+                g: Math.min(255, Math.max(0, g)) / 255,
+                b: Math.min(255, Math.max(0, b)) / 255
+            };
+        }
+
+        function showMessage(text, color) {
+            const messageEl = document.getElementById('message');
+            messageEl.style.display = 'block';
+            messageEl.style.color = color;
+            messageEl.textContent = text;
+            setTimeout(() => messageEl.style.display = 'none', 3000);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        init();
     </script>
 </body>
 </html>
