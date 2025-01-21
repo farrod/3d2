@@ -52,6 +52,12 @@
 </head>
 <body>
     <div id="controls-panel">
+    <!-- Your existing controls -->
+    
+    <!-- New button for image generation -->
+    <button id="generate-image-btn">Generate AI Image</button>
+</div>
+    <div id="controls-panel">
         <input type="file" id="file-input" accept=".glb,.gltf">
         
         <div class="control-group">
@@ -111,6 +117,59 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
+        src="fal-api.js"
+        
+         // Add event listener for the image generation button
+    document.getElementById('generate-image-btn').addEventListener('click', async () => {
+        try {
+            // Disable the button during generation
+            const generateBtn = document.getElementById('generate-image-btn');
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+
+            // Call the generate image function
+            const requestId = await submitFalAiRequest('fal-ai/iclight-v2', {
+                prompt: "perfume bottle in a volcano surrounded by lava.",
+                image_url: "https://storage.googleapis.com/falserverless/iclight-v2/bottle.png",
+                num_inference_steps: 28,
+                guidance_scale: 5
+            });
+
+            // Check status (you might want to add a more sophisticated polling mechanism)
+            const status = await checkFalAiStatus('fal-ai/iclight-v2', requestId);
+
+            if (status.completed) {
+                // If image is generated, you can do something with it
+                console.log('Image generated:', status.result);
+                
+                // Optional: display the image
+                if (status.result && status.result.images && status.result.images.length > 0) {
+                    const imageUrl = status.result.images[0].url;
+                    const imgElement = document.createElement('img');
+                    imgElement.src = imageUrl;
+                    imgElement.style.maxWidth = '300px';
+                    document.body.appendChild(imgElement);
+                }
+            }
+
+            // Re-enable the button
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate AI Image';
+
+        } catch (error) {
+            console.error('Image Generation Error:', error);
+            
+            // Show error to user
+            const generateBtn = document.getElementById('generate-image-btn');
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Generate AI Image';
+            
+            // Optional: show error message
+            alert(`Error generating image: ${error.message}`);
+        }
+    });
+
+        
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
 
@@ -320,7 +379,7 @@
 
         init();
     </script>
- <script src="fal-api.js"></script>
+
 
 </body>
 </html>
