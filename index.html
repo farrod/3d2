@@ -61,14 +61,6 @@
         button:hover {
             background: #45a049;
         }
-        #loading-spinner {
-            display: none;
-            margin-left: 10px;
-        }
-        #stats {
-            margin-top: 10px;
-            font-size: 0.9em;
-        }
     </style>
 </head>
 <body>
@@ -97,15 +89,6 @@
             </div>
         </div>
         <div class="control-group">
-            <label>Light Color:</label>
-            <div class="slider-container">
-                <label>Temperature:</label>
-                <input type="range" id="light-temp" min="1000" max="10000" step="100" value="6500">
-                <span>6500K</span>
-            </div>
-            <input type="color" id="light-color" value="#ffffff">
-        </div>
-        <div class="control-group">
             <label>Object Position:</label>
             <div class="slider-container">
                 <label>Left/Right:</label>
@@ -128,48 +111,17 @@
             <button id="wireframe-toggle">Toggle Wireframe</button>
             <button id="reset-position">Reset Position</button>
         </div>
-        <div class="control-group">
-            <label>Lens Settings:</label>
-            <div class="slider-container">
-                <label>Focal Length:</label>
-                <input type="range" id="focal-length" min="10" max="80" step="1" value="35">
-                <span>35mm</span>
-            </div>
-            <div class="slider-container">
-                <label>Distortion:</label>
-                <input type="range" id="distortion" min="-1" max="1" step="0.01" value="0">
-                <span>0</span>
-            </div>
-        </div>
-        <div class="control-group">
-            <label>Color Grading (LUT):</label>
-            <input type="file" id="lut-input" accept=".cube,.3dl">
-            <div class="slider-container">
-                <label>LUT Intensity:</label>
-                <input type="range" id="lut-intensity" min="0" max="100" step="1" value="100">
-                <span>100%</span>
-            </div>
-            <button id="reset-lut">Reset Color Grading</button>
-        </div>
         <div id="message"></div>
-        <div id="loading-spinner">Loading...</div>
         <div id="stats"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LensDistortionShader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LUTShader.js"></script>
     <script>
         let scene, camera, renderer, controls, currentModel;
-        let composer, lensPass, lutPass;
-        let currentLUTTexture = null;
+        let ambientLight, directionalLight;
         const messageEl = document.getElementById('message');
-        const loadingSpinner = document.getElementById('loading-spinner');
         const statsEl = document.getElementById('stats');
         let isWireframe = false;
 
@@ -183,7 +135,7 @@
             camera.position.set(5, 5, 5);
             camera.lookAt(0, 0, 0);
 
-            // Renderer setup with better quality
+            // Renderer setup
             renderer = new THREE.WebGLRenderer({ 
                 antialias: true,
                 preserveDrawingBuffer: true 
@@ -193,7 +145,7 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Enhanced controls
+            // Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
@@ -201,71 +153,17 @@
             controls.maxDistance = 100;
             controls.minDistance = 1;
 
-            // Enhanced lighting setup
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            // Lighting
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
             
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
             directionalLight.position.set(5, 5, 5);
             directionalLight.castShadow = true;
             scene.add(directionalLight);
 
-            // Set up tone mapping
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;
-
-            // Removed grid helper
-
-            // Set up post processing
-            composer = new THREE.EffectComposer(renderer);
-            
-            const renderPass = new THREE.RenderPass(scene, camera);
-            composer.addPass(renderPass);
-            
-            // Lens distortion pass
-            lensPass = new THREE.ShaderPass(THREE.LensDistortionShader);
-            lensPass.uniforms.distortion.value = 0.0;
-            lensPass.uniforms.focalLength.value = 35.0;
-            composer.addPass(lensPass);
-            
-            // LUT pass
-            lutPass = new THREE.ShaderPass(THREE.LUTShader);
-            lutPass.uniforms.intensity.value = 1.0;
-            composer.addPass(lutPass);
-
             setupEventListeners();
             animate();
-        }
-
-        // Convert color temperature to RGB
-        function kelvinToRGB(temperature) {
-            temperature = temperature / 100;
-            let r, g, b;
-            
-            if (temperature <= 66) {
-                r = 255;
-                g = temperature;
-                g = 99.4708025861 * Math.log(g) - 161.1195681661;
-                
-                if (temperature <= 19) {
-                    b = 0;
-                } else {
-                    b = temperature - 10;
-                    b = 138.5177312231 * Math.log(b) - 305.0447927307;
-                }
-            } else {
-                r = temperature - 60;
-                r = 329.698727446 * Math.pow(r, -0.1332047592);
-                g = temperature - 60;
-                g = 288.1221695283 * Math.pow(g, -0.0755148492);
-                b = 255;
-            }
-            
-            return {
-                r: Math.min(255, Math.max(0, r)) / 255,
-                g: Math.min(255, Math.max(0, g)) / 255,
-                b: Math.min(255, Math.max(0, b)) / 255
-            };
         }
 
         function setupEventListeners() {
@@ -293,26 +191,10 @@
                 this.nextElementSibling.textContent = e.target.value;
             });
 
-            document.getElementById('light-temp').addEventListener('input', function(e) {
-                const temp = parseInt(e.target.value);
-                const rgb = kelvinToRGB(temp);
-                const color = new THREE.Color(rgb.r, rgb.g, rgb.b);
-                ambientLight.color.copy(color);
-                directionalLight.color.copy(color);
-                document.getElementById('light-color').value = '#' + color.getHexString();
-                this.nextElementSibling.textContent = temp + 'K';
-            });
-
-            document.getElementById('light-color').addEventListener('input', function(e) {
-                const color = new THREE.Color(e.target.value);
-                ambientLight.color.copy(color);
-                directionalLight.color.copy(color);
-            });
-
             // Position controls
             document.getElementById('position-x').addEventListener('input', function(e) {
                 if (currentModel) {
-                    currentModel.position.x = -parseFloat(e.target.value); // Inverted for intuitive left/right
+                    currentModel.position.x = -parseFloat(e.target.value);
                     this.nextElementSibling.textContent = e.target.value;
                 }
             });
@@ -326,10 +208,21 @@
 
             document.getElementById('position-z').addEventListener('input', function(e) {
                 if (currentModel) {
-                    currentModel.position.z = -parseFloat(e.target.value); // Inverted for intuitive forward/back
+                    currentModel.position.z = -parseFloat(e.target.value);
                     this.nextElementSibling.textContent = e.target.value;
                 }
             });
+
+            // Camera reset
+            document.getElementById('reset-camera').addEventListener('click', function() {
+                camera.position.set(5, 5, 5);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            });
+
+            // Wireframe toggle
+            document.getElementById('wireframe-toggle').addEventListener('click', toggleWireframe);
 
             // Reset position button
             document.getElementById('reset-position').addEventListener('click', function() {
@@ -344,83 +237,6 @@
                 }
             });
 
-            // Lens controls
-            document.getElementById('focal-length').addEventListener('input', function(e) {
-                const value = parseFloat(e.target.value);
-                lensPass.uniforms.focalLength.value = value;
-                this.nextElementSibling.textContent = value + 'mm';
-            });
-
-            document.getElementById('distortion').addEventListener('input', function(e) {
-                const value = parseFloat(e.target.value);
-                lensPass.uniforms.distortion.value = value;
-                this.nextElementSibling.textContent = value.toFixed(2);
-            });
-
-            // LUT controls
-            document.getElementById('lut-input').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const content = e.target.result;
-                    
-                    // Parse LUT file (supporting .cube format)
-                    if (file.name.endsWith('.cube')) {
-                        const lutData = parseCubeLUT(content);
-                        if (lutData) {
-                            if (currentLUTTexture) {
-                                currentLUTTexture.dispose();
-                            }
-                            currentLUTTexture = new THREE.DataTexture(
-                                lutData,
-                                32,
-                                32,
-                                THREE.RGBFormat,
-                                THREE.FloatType
-                            );
-                            currentLUTTexture.needsUpdate = true;
-                            lutPass.uniforms.lutMap.value = currentLUTTexture;
-                            showMessage('LUT loaded successfully!', 'green');
-                        }
-                    } else {
-                        showMessage('Unsupported LUT format. Please use .cube files.', 'red');
-                    }
-                };
-                reader.readAsText(file);
-            });
-
-            document.getElementById('lut-intensity').addEventListener('input', function(e) {
-                const value = parseInt(e.target.value) / 100;
-                lutPass.uniforms.intensity.value = value;
-                this.nextElementSibling.textContent = (value * 100).toFixed(0) + '%';
-            });
-
-            document.getElementById('reset-lut').addEventListener('click', function() {
-                if (currentLUTTexture) {
-                    currentLUTTexture.dispose();
-                    currentLUTTexture = null;
-                }
-                lutPass.uniforms.lutMap.value = null;
-                lutPass.uniforms.intensity.value = 1.0;
-                document.getElementById('lut-intensity').value = 100;
-                document.getElementById('lut-intensity').nextElementSibling.textContent = '100%';
-                document.getElementById('lut-input').value = '';
-                showMessage('Color grading reset', 'blue');
-            });
-
-            // Camera reset
-            document.getElementById('reset-camera').addEventListener('click', function() {
-                camera.position.set(5, 5, 5);
-                camera.lookAt(0, 0, 0);
-                controls.target.set(0, 0, 0);
-                controls.update();
-            });
-
-            // Wireframe toggle
-            document.getElementById('wireframe-toggle').addEventListener('click', toggleWireframe);
-
             // Window resize handler
             window.addEventListener('resize', onWindowResize);
         }
@@ -429,7 +245,6 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            loadingSpinner.style.display = 'inline';
             showMessage('Loading model...', 'blue');
 
             const loader = new THREE.GLTFLoader();
@@ -458,13 +273,19 @@
                     const scale = 2 / maxDim;
                     currentModel.scale.multiplyScalar(scale);
 
+                    // Reset position sliders
+                    document.getElementById('position-x').value = 0;
+                    document.getElementById('position-y').value = 0;
+                    document.getElementById('position-z').value = 0;
+                    document.getElementById('position-x').nextElementSibling.textContent = '0';
+                    document.getElementById('position-y').nextElementSibling.textContent = '0';
+                    document.getElementById('position-z').nextElementSibling.textContent = '0';
+
                     // Update stats
                     updateModelStats(gltf);
 
-                    loadingSpinner.style.display = 'none';
                     showMessage('Model loaded successfully!', 'green');
                 }, undefined, function(error) {
-                    loadingSpinner.style.display = 'none';
                     showMessage('Error loading model: ' + error.message, 'red');
                 });
             };
@@ -475,7 +296,6 @@
         function updateModelStats(gltf) {
             let vertexCount = 0;
             let triangleCount = 0;
-            let materialCount = 0;
             const materials = new Set();
 
             gltf.scene.traverse((node) => {
@@ -530,32 +350,10 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        function parseCubeLUT(content) {
-            const lines = content.split('\n');
-            const size = 32; // Standard size for LUT
-            const data = new Float32Array(size * size * size * 3);
-            
-            let dataIndex = 0;
-            for (const line of lines) {
-                // Skip comments and empty lines
-                if (line.startsWith('#') || line.trim() === '') continue;
-                
-                // Parse color values
-                const values = line.trim().split(/\s+/).map(Number);
-                if (values.length === 3) {
-                    data[dataIndex++] = values[0];
-                    data[dataIndex++] = values[1];
-                    data[dataIndex++] = values[2];
-                }
-            }
-            
-            return data;
-        }
-
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
-            composer.render();
+            renderer.render(scene, camera);
         }
 
         init();
