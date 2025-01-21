@@ -51,62 +51,63 @@
     </style>
 </head>
 <body>
-    <div id="controls-panel">
+<div id="controls-panel">
+    <div class="control-group">
+        <label for="ai-prompt">Image Prompt:</label>
+        <input type="text" id="ai-prompt" placeholder="Enter your image description" style="width: 100%; margin-bottom: 10px;">
         <button id="generate-image-btn">Generate AI Image</button>
-        
-        <input type="file" id="file-input" accept=".glb,.gltf">
-        
-        <div class="control-group">
-            <div class="slider-container">
-                <label>Ambient:</label>
-                <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
-                <span>0.5</span>
-            </div>
-            <div class="slider-container">
-                <label>Direct:</label>
-                <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
-                <span>1.0</span>
-            </div>
-            <div class="slider-container">
-                <label>Exposure:</label>
-                <input type="range" id="exposure" min="0" max="2" step="0.1" value="1.0">
-                <span>1.0</span>
-            </div>
-            <div class="slider-container">
-                <label>Temperature:</label>
-                <input type="range" id="temperature" min="1000" max="10000" step="100" value="6500">
-                <span>6500K</span>
-            </div>
-        </div>
-
-        <div class="control-group">
-            <div class="slider-container">
-                <label>Left/Right:</label>
-                <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
-                <span>0</span>
-            </div>
-            <div class="slider-container">
-                <label>Up/Down:</label>
-                <input type="range" id="position-y" min="-5" max="5" step="0.1" value="0">
-                <span>0</span>
-            </div>
-            <div class="slider-container">
-                <label>Front/Back:</label>
-                <input type="range" id="position-z" min="-5" max="5" step="0.1" value="0">
-                <span>0</span>
-            </div>
-        </div>
-
-        <div class="control-group">
-            <label>Background:</label>
-            <input type="color" id="bg-color" value="#f0f0f0" style="margin-left: 10px;">
-            <button id="reset-camera">Reset View</button>
-            <button id="reset-position">Reset Position</button>
-            <button id="take-snapshot" style="background: #2196F3;">Take Snapshot</button>
-        </div>
-
-        <div id="message"></div>
     </div>
+    
+    <input type="file" id="file-input" accept=".glb,.gltf">
+    
+    <div class="control-group">
+        <div class="slider-container">
+            <label>Ambient:</label>
+            <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
+            <span>0.5</span>
+        </div>
+        <div class="slider-container">
+            <label>Direct:</label>
+            <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
+            <span>1.0</span>
+        </div>
+        <div class="slider-container">
+            <label>Exposure:</label>
+            <input type="range" id="exposure" min="0" max="2" step="0.1" value="1.0">
+            <span>1.0</span>
+        </div>
+        <div class="slider-container">
+            <label>Temperature:</label>
+            <input type="range" id="temperature" min="1000" max="10000" step="100" value="6500">
+            <span>6500K</span>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="slider-container">
+            <label>Left/Right:</label>
+            <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
+            <span>0</span>
+        </div>
+        <div class="slider-container">
+            <label>Up/Down:</label>
+            <input type="range" id="position-y" min="-5" max="5" step="0.1" value="0">
+            <span>0</span>
+        </div>
+        <div class="slider-container">
+            <label>Front/Back:</label>
+            <input type="range" id="position-z" min="-5" max="5" step="0.1" value="0">
+            <span>0</span>
+        </div>
+    </div>
+    <div class="control-group">
+        <label>Background:</label>
+        <input type="color" id="bg-color" value="#f0f0f0" style="margin-left: 10px;">
+        <button id="reset-camera">Reset View</button>
+        <button id="reset-position">Reset Position</button>
+        <button id="take-snapshot" style="background: #2196F3;">Take Snapshot</button>
+    </div>
+    <div id="message"></div>
+</div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
