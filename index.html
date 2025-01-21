@@ -1,43 +1,9 @@
-// Event Listeners
-            window.addEventListener('resize', onWindowResize, false);
-            document.getElementById('file-input').addEventListener('change', loadModel);
-            document.getElementById('bg-color').addEventListener('input', e => {
-                scene.background = new THREE.Color(e.target.value);
-            });
-            
-            // Lighting controls
-            document.getElementById('ambient-intensity').addEventListener('input', e => {
-                const value = parseFloat(e.target.value);
-                ambientLight.intensity = value;
-                e.target.nextElementSibling.textContent = value.toFixed(1);
-            });
-
-            document.getElementById('direct-intensity').addEventListener('input', e => {
-                const value = parseFloat(e.target.value);
-                directionalLight.intensity = value;
-                e.target.nextElementSibling.textContent = value.toFixed(1);
-            });
-
-            document.getElementById('exposure').addEventListener('input', e => {
-                const value = parseFloat(e.target.value);
-                renderer.toneMappingExposure = value;
-                e.target.nextElementSibling.textContent = value.toFixed(1);
-            });
-
-            document.getElementById('light-temp').addEventListener('input', e => {
-                const temp = parseInt(e.target.value);
-                const color = kelvinToRGB(temp);
-                ambientLight.color.setRGB(color.r, color.g, color.b);
-                directionalLight.color.setRGB(color.r, color.g, color.b);
-                document.getElementById('light-color').value = '#' + new THREE.Color(color.r, color.g, c<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <title>3D Model Viewer</title>
     <style>
-        body { 
-            margin: 0; 
-            font-family: Arial, sans-serif;
-        }
+        body { margin: 0; }
         #controls-panel {
             position: absolute;
             top: 20px;
@@ -47,6 +13,7 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            font-family: Arial, sans-serif;
         }
         .control-group {
             margin-top: 10px;
@@ -54,22 +21,18 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
-        .control-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
         .slider-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
             margin: 5px 0;
+            display: grid;
+            grid-template-columns: 100px 1fr 40px;
+            gap: 10px;
+            align-items: center;
         }
-        .slider-container input[type="range"] {
-            flex: 1;
-        }
-        .slider-container span {
-            min-width: 40px;
+        #message {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            display: none;
         }
         button {
             background: #4CAF50;
@@ -83,19 +46,36 @@
         button:hover {
             background: #45a049;
         }
-        #message {
-            margin-top: 10px;
-            padding: 8px;
-            border-radius: 4px;
-            display: none;
-        }
     </style>
 </head>
 <body>
     <div id="controls-panel">
         <input type="file" id="file-input" accept=".glb,.gltf">
+        
         <div class="control-group">
-            <label>Position Controls:</label>
+            <div class="slider-container">
+                <label>Ambient:</label>
+                <input type="range" id="ambient-light" min="0" max="2" step="0.1" value="0.5">
+                <span>0.5</span>
+            </div>
+            <div class="slider-container">
+                <label>Direct:</label>
+                <input type="range" id="direct-light" min="0" max="2" step="0.1" value="1.0">
+                <span>1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Exposure:</label>
+                <input type="range" id="exposure" min="0" max="2" step="0.1" value="1.0">
+                <span>1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Temperature:</label>
+                <input type="range" id="temperature" min="1000" max="10000" step="100" value="6500">
+                <span>6500K</span>
+            </div>
+        </div>
+
+        <div class="control-group">
             <div class="slider-container">
                 <label>Left/Right:</label>
                 <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
@@ -107,49 +87,20 @@
                 <span>0</span>
             </div>
             <div class="slider-container">
-                <label>Forward/Back:</label>
+                <label>Front/Back:</label>
                 <input type="range" id="position-z" min="-5" max="5" step="0.1" value="0">
                 <span>0</span>
             </div>
         </div>
+
         <div class="control-group">
-            <label>Lighting:</label>
-            <div class="slider-container">
-                <label>Ambient Light:</label>
-                <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
-                <span>0.5</span>
-            </div>
-            <div class="slider-container">
-                <label>Direct Light:</label>
-                <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
-                <span>1.0</span>
-            </div>
-            <div class="slider-container">
-                <label>Exposure:</label>
-                <input type="range" id="exposure" min="0" max="2" step="0.1" value="1">
-                <span>1.0</span>
-            </div>
-            <div class="slider-container">
-                <label>Light Temperature:</label>
-                <input type="range" id="light-temp" min="1000" max="10000" step="100" value="6500">
-                <span>6500K</span>
-            </div>
-            <div style="margin-top: 8px;">
-                <label>Light Color:</label>
-                <input type="color" id="light-color" value="#ffffff">
-            </div>
-            <div style="margin-top: 8px;">
-                <label>Background:</label>
-                <input type="color" id="bg-color" value="#f0f0f0">
-            </div>
-        </div>
-        <div class="control-group">
+            <label>Background:</label>
+            <input type="color" id="bg-color" value="#f0f0f0" style="margin-left: 10px;">
             <button id="reset-camera">Reset View</button>
             <button id="reset-position">Reset Position</button>
-            <button id="wireframe-toggle">Wireframe</button>
         </div>
+
         <div id="message"></div>
-        <div id="stats"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -159,19 +110,15 @@
     <script>
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
-        let isWireframe = false;
 
         function init() {
-            // Scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf0f0f0);
 
-            // Camera
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(2, 2, 2);
             camera.lookAt(0, 0, 0);
 
-            // Renderer with tone mapping
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
@@ -179,11 +126,9 @@
             renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
 
-            // Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
-            // Lights
             ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
 
@@ -191,48 +136,60 @@
             directionalLight.position.set(2, 2, 2);
             scene.add(directionalLight);
 
-            // Event Listeners
-            window.addEventListener('resize', onWindowResize, false);
+            setupListeners();
+            animate();
+        }
+
+        function setupListeners() {
             document.getElementById('file-input').addEventListener('change', loadModel);
+            
+            document.getElementById('ambient-light').addEventListener('input', e => {
+                ambientLight.intensity = parseFloat(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('direct-light').addEventListener('input', e => {
+                directionalLight.intensity = parseFloat(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('exposure').addEventListener('input', e => {
+                renderer.toneMappingExposure = parseFloat(e.target.value);
+                e.target.nextElementSibling.textContent = e.target.value;
+            });
+
+            document.getElementById('temperature').addEventListener('input', e => {
+                const temp = parseInt(e.target.value);
+                const rgb = kelvinToRGB(temp);
+                const color = new THREE.Color(rgb.r, rgb.g, rgb.b);
+                ambientLight.color.copy(color);
+                directionalLight.color.copy(color);
+                e.target.nextElementSibling.textContent = temp + 'K';
+            });
+
             document.getElementById('bg-color').addEventListener('input', e => {
                 scene.background = new THREE.Color(e.target.value);
             });
-            document.getElementById('light-intensity').addEventListener('input', e => {
-                const value = parseFloat(e.target.value);
-                light.intensity = value;
-                e.target.nextElementSibling.textContent = value.toFixed(1);
-            });
+
             document.getElementById('reset-camera').addEventListener('click', () => {
                 camera.position.set(2, 2, 2);
                 camera.lookAt(0, 0, 0);
                 controls.target.set(0, 0, 0);
                 controls.update();
             });
-            document.getElementById('wireframe-toggle').addEventListener('click', toggleWireframe);
-            setupPositionControls();
 
-            animate();
-        }
+            document.getElementById('reset-position').addEventListener('click', resetPosition);
 
-        function setupPositionControls() {
             ['x', 'y', 'z'].forEach(axis => {
                 document.getElementById(`position-${axis}`).addEventListener('input', e => {
                     if (!currentModel) return;
                     const value = parseFloat(e.target.value);
                     currentModel.position[axis] = axis === 'x' || axis === 'z' ? -value : value;
-                    e.target.nextElementSibling.textContent = value.toFixed(1);
+                    e.target.nextElementSibling.textContent = value;
                 });
             });
 
-            document.getElementById('reset-position').addEventListener('click', () => {
-                if (!currentModel) return;
-                currentModel.position.set(0, 0, 0);
-                ['x', 'y', 'z'].forEach(axis => {
-                    const slider = document.getElementById(`position-${axis}`);
-                    slider.value = 0;
-                    slider.nextElementSibling.textContent = '0';
-                });
-            });
+            window.addEventListener('resize', onWindowResize, false);
         }
 
         function loadModel(event) {
@@ -242,13 +199,14 @@
             const loader = new THREE.GLTFLoader();
             const reader = new FileReader();
 
+            showMessage('Loading model...', 'blue');
+
             reader.onload = function(e) {
                 loader.parse(e.target.result, '', function(gltf) {
                     if (currentModel) scene.remove(currentModel);
                     
                     currentModel = gltf.scene;
                     
-                    // Reset position and scale
                     const box = new THREE.Box3().setFromObject(currentModel);
                     const center = box.getCenter(new THREE.Vector3());
                     const size = box.getSize(new THREE.Vector3());
@@ -262,8 +220,9 @@
                     currentModel.scale.multiplyScalar(scale);
                     
                     scene.add(currentModel);
+                    resetPosition();
                     
-                    showMessage('Model loaded successfully', 'green');
+                    showMessage('Model loaded successfully!', 'green');
                 }, undefined, function(error) {
                     showMessage('Error loading model: ' + error.message, 'red');
                 });
@@ -272,22 +231,51 @@
             reader.readAsArrayBuffer(file);
         }
 
+        function resetPosition() {
+            if (!currentModel) return;
+            currentModel.position.set(0, 0, 0);
+            ['x', 'y', 'z'].forEach(axis => {
+                const slider = document.getElementById(`position-${axis}`);
+                slider.value = 0;
+                slider.nextElementSibling.textContent = '0';
+            });
+        }
+
+        function kelvinToRGB(kelvin) {
+            const temp = kelvin / 100;
+            let r, g, b;
+
+            if (temp <= 66) {
+                r = 255;
+                g = temp;
+                g = 99.4708025861 * Math.log(g) - 161.1195681661;
+                if (temp <= 19) {
+                    b = 0;
+                } else {
+                    b = temp - 10;
+                    b = 138.5177312231 * Math.log(b) - 305.0447927307;
+                }
+            } else {
+                r = temp - 60;
+                r = 329.698727446 * Math.pow(r, -0.1332047592);
+                g = temp - 60;
+                g = 288.1221695283 * Math.pow(g, -0.0755148492);
+                b = 255;
+            }
+
+            return {
+                r: Math.min(255, Math.max(0, r)) / 255,
+                g: Math.min(255, Math.max(0, g)) / 255,
+                b: Math.min(255, Math.max(0, b)) / 255
+            };
+        }
+
         function showMessage(text, color) {
             const messageEl = document.getElementById('message');
             messageEl.style.display = 'block';
             messageEl.style.color = color;
             messageEl.textContent = text;
             setTimeout(() => messageEl.style.display = 'none', 3000);
-        }
-
-        function toggleWireframe() {
-            if (!currentModel) return;
-            isWireframe = !isWireframe;
-            currentModel.traverse(node => {
-                if (node.isMesh) {
-                    node.material.wireframe = isWireframe;
-                }
-            });
         }
 
         function onWindowResize() {
