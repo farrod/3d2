@@ -3,21 +3,176 @@
 <head>
     <title>3D Model Viewer with Shader LUT</title>
     <style>
-        /* ... [Previous CSS remains the same] ... */
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #controls-panel {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 300px;
+        }
+        .control-group {
+            margin-top: 10px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.95);
+        }
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        .slider-container {
+            display: grid;
+            grid-template-columns: 100px 1fr 40px;
+            gap: 10px;
+            align-items: center;
+            margin: 8px 0;
+        }
+        .file-input-container {
+            margin: 10px 0;
+        }
+        .file-input-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        .file-input-container input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 2px;
+            font-size: 12px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #message {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            display: none;
+            font-weight: bold;
+        }
+        #container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
     </style>
 </head>
 <body>
+    <div id="container"></div>
     <div id="controls-panel">
-        <!-- ... [Previous controls HTML remains the same] ... -->
+        <div class="control-group">
+            <h3>Model Controls</h3>
+            <div class="file-input-container">
+                <label>Load 3D Model (.glb, .gltf):</label>
+                <input type="file" id="file-input" accept=".glb,.gltf">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>LUT Controls</h3>
+            <div class="file-input-container">
+                <label>Load LUT File (.cube, .3dl):</label>
+                <input type="file" id="lut-input" accept=".cube,.3dl">
+            </div>
+            <div class="slider-container">
+                <label>LUT Mix:</label>
+                <input type="range" id="lut-mix" min="0" max="1" step="0.01" value="1">
+                <span>1.0</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>Lighting Controls</h3>
+            <div class="slider-container">
+                <label>Ambient:</label>
+                <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
+                <span>0.5</span>
+            </div>
+            <div class="slider-container">
+                <label>Direct:</label>
+                <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
+                <span>1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Exposure:</label>
+                <input type="range" id="exposure" min="0" max="2" step="0.1" value="1.0">
+                <span>1.0</span>
+            </div>
+            <div class="slider-container">
+                <label>Temperature:</label>
+                <input type="range" id="temperature" min="1000" max="10000" step="100" value="6500">
+                <span>6500K</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>Position Controls</h3>
+            <div class="slider-container">
+                <label>Left/Right:</label>
+                <input type="range" id="position-x" min="-5" max="5" step="0.1" value="0">
+                <span>0</span>
+            </div>
+            <div class="slider-container">
+                <label>Up/Down:</label>
+                <input type="range" id="position-y" min="-5" max="5" step="0.1" value="0">
+                <span>0</span>
+            </div>
+            <div class="slider-container">
+                <label>Front/Back:</label>
+                <input type="range" id="position-z" min="-5" max="5" step="0.1" value="0">
+                <span>0</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>Scene Controls</h3>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <label>Background:</label>
+                <input type="color" id="bg-color" value="#f0f0f0">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button id="reset-camera">Reset View</button>
+                <button id="reset-position">Reset Position</button>
+            </div>
+        </div>
+
+        <div id="message"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
 
     <script>
         let scene, camera, renderer, controls, currentModel;
@@ -50,31 +205,15 @@
 
                 void main() {
                     vec4 originalColor = texture2D(tDiffuse, vUv);
-                    
-                    float cell = lutSize - 1.0;
-                    
-                    float blueColor = originalColor.b * cell;
-                    float row = floor(blueColor);
-                    float col = blueColor - row;
-                    
-                    vec2 quad1 = vec2(0.0);
-                    quad1.y = row / lutSize;
-                    quad1.x = originalColor.r;
-                    
-                    vec2 quad2 = vec2(0.0);
-                    quad2.y = (row + 1.0) / lutSize;
-                    quad2.x = originalColor.r;
-                    
-                    vec3 newColor1 = texture2D(lutMap, quad1).rgb;
-                    vec3 newColor2 = texture2D(lutMap, quad2).rgb;
-                    vec3 newColor = mix(newColor1, newColor2, col);
-                    
-                    gl_FragColor = vec4(mix(originalColor.rgb, newColor, intensity), originalColor.a);
+                    vec4 lutColor = texture2D(lutMap, vUv);
+                    gl_FragColor = mix(originalColor, lutColor, intensity);
                 }
             `
         };
 
         function init() {
+            const container = document.getElementById('container');
+
             // Scene setup
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf0f0f0);
@@ -87,9 +226,8 @@
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;
-            document.body.appendChild(renderer.domElement);
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
 
             // Post-processing setup
             composer = new THREE.EffectComposer(renderer);
@@ -117,61 +255,8 @@
             animate();
         }
 
-        function loadLUT(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const content = e.target.result;
-                const lines = content.split('\n');
-                const lutSize = 32;
-                const lutData = new Uint8Array(lutSize * lutSize * 3);
-                
-                let dataIndex = 0;
-                for (let line of lines) {
-                    line = line.trim();
-                    if (line && !line.startsWith('#')) {
-                        const [r, g, b] = line.split(' ').map(v => parseFloat(v));
-                        lutData[dataIndex] = r * 255;
-                        lutData[dataIndex + 1] = g * 255;
-                        lutData[dataIndex + 2] = b * 255;
-                        dataIndex += 3;
-                    }
-                }
-
-                lutTexture = new THREE.DataTexture(lutData, lutSize, lutSize, THREE.RGBFormat);
-                lutTexture.needsUpdate = true;
-
-                // Update shader uniforms
-                lutPass.uniforms.lutMap.value = lutTexture;
-                lutPass.uniforms.lutSize.value = lutSize;
-                lutPass.enabled = true;
-
-                showMessage('LUT loaded successfully!', '#009933');
-            };
-            reader.readAsText(file);
-        }
-
-        function setupListeners() {
-            // ... [Previous listeners remain the same] ...
-            
-            document.getElementById('lut-mix').addEventListener('input', e => {
-                lutMixValue = parseFloat(e.target.value);
-                if (lutPass) {
-                    lutPass.uniforms.intensity.value = lutMixValue;
-                }
-                e.target.nextElementSibling.textContent = lutMixValue.toFixed(2);
-            });
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            composer.render();
-        }
-
-        // ... [Rest of the utility functions remain the same] ...
+        // The rest of your functions (loadModel, setupListeners, etc.) go here
+        // Make sure to include all the utility functions we provided earlier
 
         init();
     </script>
