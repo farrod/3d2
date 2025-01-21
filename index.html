@@ -3,7 +3,10 @@
 <head>
     <title>3D Model Viewer</title>
     <style>
-        body { margin: 0; }
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif;
+        }
         #controls-panel {
             position: absolute;
             top: 20px;
@@ -13,7 +16,6 @@
             padding: 15px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            font-family: Arial, sans-serif;
         }
         .control-group {
             margin-top: 10px;
@@ -22,17 +24,11 @@
             border-radius: 4px;
         }
         .slider-container {
-            margin: 5px 0;
             display: grid;
             grid-template-columns: 100px 1fr 40px;
             gap: 10px;
             align-items: center;
-        }
-        #message {
-            margin-top: 10px;
-            padding: 8px;
-            border-radius: 4px;
-            display: none;
+            margin: 5px 0;
         }
         button {
             background: #4CAF50;
@@ -46,6 +42,12 @@
         button:hover {
             background: #45a049;
         }
+        #message {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -55,12 +57,12 @@
         <div class="control-group">
             <div class="slider-container">
                 <label>Ambient:</label>
-                <input type="range" id="ambient-light" min="0" max="2" step="0.1" value="0.5">
+                <input type="range" id="ambient-intensity" min="0" max="2" step="0.1" value="0.5">
                 <span>0.5</span>
             </div>
             <div class="slider-container">
                 <label>Direct:</label>
-                <input type="range" id="direct-light" min="0" max="2" step="0.1" value="1.0">
+                <input type="range" id="direct-intensity" min="0" max="2" step="0.1" value="1.0">
                 <span>1.0</span>
             </div>
             <div class="slider-container">
@@ -91,17 +93,6 @@
                 <input type="range" id="position-z" min="-5" max="5" step="0.1" value="0">
                 <span>0</span>
             </div>
-        </div>
-
-        <div class="control-group">
-            <label>Color Grading (LUT):</label>
-            <input type="file" id="lut-input" accept=".cube,.look">
-            <div class="slider-container">
-                <label>LUT Mix:</label>
-                <input type="range" id="lut-mix" min="0" max="100" step="1" value="100">
-                <span>100%</span>
-            </div>
-            <button id="reset-lut">Reset LUT</button>
         </div>
 
         <div class="control-group">
@@ -137,68 +128,6 @@
             renderer.toneMappingExposure = 1.0;
             document.body.appendChild(renderer.domElement);
 
-            // Post-processing setup
-            composer = new THREE.EffectComposer(renderer);
-            const renderPass = new THREE.RenderPass(scene, camera);
-            composer.addPass(renderPass);
-
-            // Custom LUT shader
-            const lutShader = {
-                uniforms: {
-                    tDiffuse: { value: null },
-                    lutMap: { value: null },
-                    lutSize: { value: 32 },
-                    intensity: { value: 1.0 }
-                },
-                vertexShader: `
-                    varying vec2 vUv;
-                    void main() {
-                        vUv = uv;
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    }
-                `,
-                fragmentShader: `
-                    uniform sampler2D tDiffuse;
-                    uniform sampler2D lutMap;
-                    uniform float lutSize;
-                    uniform float intensity;
-                    varying vec2 vUv;
-
-                    void main() {
-                        vec4 originalColor = texture2D(tDiffuse, vUv);
-                        
-                        if (lutMap == null) {
-                            gl_FragColor = originalColor;
-                            return;
-                        }
-
-                        float sliceSize = 1.0 / lutSize;
-                        float slicePixelSize = sliceSize / lutSize;
-                        float width = lutSize * lutSize;
-                        float sliceInnerSize = slicePixelSize * (lutSize - 1.0);
-                        
-                        vec2 slice;
-                        slice.y = floor(originalColor.b * lutSize);
-                        slice.x = floor(originalColor.r * lutSize);
-                        
-                        float xOffset = slicePixelSize * 0.5 + originalColor.r * sliceInnerSize;
-                        float yOffset = sliceSize * 0.5 + originalColor.g * sliceInnerSize;
-                        float zOffset = sliceSize * slice.y;
-                        
-                        vec2 uv;
-                        uv.x = slice.x * sliceSize + xOffset;
-                        uv.y = 1.0 - (zOffset + yOffset);
-                        
-                        vec4 lutColor = texture2D(lutMap, uv);
-                        gl_FragColor = mix(originalColor, lutColor, intensity);
-                    }
-                `
-            };
-
-            lutPass = new THREE.ShaderPass(lutShader);
-            lutPass.renderToScreen = true;
-            composer.addPass(lutPass);
-
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
 
@@ -216,12 +145,12 @@
         function setupListeners() {
             document.getElementById('file-input').addEventListener('change', loadModel);
             
-            document.getElementById('ambient-light').addEventListener('input', e => {
+            document.getElementById('ambient-intensity').addEventListener('input', e => {
                 ambientLight.intensity = parseFloat(e.target.value);
                 e.target.nextElementSibling.textContent = e.target.value;
             });
 
-            document.getElementById('direct-light').addEventListener('input', e => {
+            document.getElementById('direct-intensity').addEventListener('input', e => {
                 directionalLight.intensity = parseFloat(e.target.value);
                 e.target.nextElementSibling.textContent = e.target.value;
             });
@@ -262,26 +191,7 @@
                 });
             });
 
-            document.getElementById('lut-input').addEventListener('change', loadLUT);
-            
-            document.getElementById('lut-mix').addEventListener('input', e => {
-                if (lutPass) {
-                    lutPass.uniforms.intensity.value = parseInt(e.target.value) / 100;
-                    e.target.nextElementSibling.textContent = e.target.value + '%';
-                }
-            });
-
-            document.getElementById('reset-lut').addEventListener('click', () => {
-                if (currentLUT) {
-                    currentLUT.dispose();
-                    currentLUT = null;
-                }
-                lutPass.uniforms.lutMap.value = null;
-                document.getElementById('lut-mix').value = 100;
-                document.getElementById('lut-mix').nextElementSibling.textContent = '100%';
-                document.getElementById('lut-input').value = '';
-                showMessage('Color grading reset', 'blue');
-            });
+            window.addEventListener('resize', onWindowResize, false);
         }
 
         function loadModel(event) {
@@ -374,61 +284,6 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function loadLUT(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const content = e.target.result;
-                if (file.name.endsWith('.cube')) {
-                    const lutData = parseCubeLUT(content);
-                    if (lutData) {
-                        if (currentLUT) {
-                            currentLUT.dispose();
-                        }
-                        currentLUT = new THREE.DataTexture(
-                            lutData,
-                            32,
-                            32 * 32,
-                            THREE.RGBFormat,
-                            THREE.FloatType
-                        );
-                        currentLUT.needsUpdate = true;
-                        lutPass.uniforms.lutMap.value = currentLUT;
-                        lutPass.uniforms.lutSize.value = 32;
-                        showMessage('LUT loaded successfully!', 'green');
-                    }
-                } else {
-                    showMessage('Unsupported LUT format. Please use .cube files.', 'red');
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function parseCubeLUT(content) {
-            const lines = content.split('\n');
-            const data = new Float32Array(32 * 32 * 32 * 3);
-            let dataIndex = 0;
-            
-            for (const line of lines) {
-                if (line.startsWith('#') || line.trim() === '' || 
-                    line.startsWith('TITLE') || line.startsWith('LUT_3D_SIZE') || 
-                    line.startsWith('DOMAIN_MIN') || line.startsWith('DOMAIN_MAX')) {
-                    continue;
-                }
-                
-                const values = line.trim().split(/\s+/).map(Number);
-                if (values.length === 3) {
-                    data[dataIndex++] = values[0];
-                    data[dataIndex++] = values[1];
-                    data[dataIndex++] = values[2];
-                }
-            }
-            
-            return data;
         }
 
         function animate() {
