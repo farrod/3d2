@@ -107,19 +107,6 @@
             </div>
         </div>
         <div class="control-group">
-            <label>Lens Effects:</label>
-            <div class="slider-container">
-                <label>Focal Length:</label>
-                <input type="range" id="focal-length" min="10" max="200" step="1" value="50">
-                <span>50mm</span>
-            </div>
-            <div class="slider-container">
-                <label>Distortion:</label>
-                <input type="range" id="barrel-distortion" min="-1" max="1" step="0.01" value="0">
-                <span>0.00</span>
-            </div>
-        </div>
-        <div class="control-group">
             <button id="reset-camera">Reset Camera</button>
             <button id="wireframe-toggle">Toggle Wireframe</button>
             <button id="reset-position">Reset Position</button>
@@ -131,14 +118,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
     <script>
         let scene, camera, renderer, controls, currentModel;
         let ambientLight, directionalLight;
-        let composer, renderPass;
         const messageEl = document.getElementById('message');
         const statsEl = document.getElementById('stats');
         let isWireframe = false;
@@ -443,4 +425,3 @@
     </script>
 </body>
 </html>
-             
